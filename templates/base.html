@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="navbar">
+        <nav>
+            <a href="/">Home</a>
+            <a href="/teams">Teams</a>
+            <a href="/events">Events</a>
+            <a href="/membership">Membership</a>
+            <a href="/shop">Shop</a>
+            <a href="/rules">Rules</a>
+        </nav>
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Klub logo" class="logo">
+    </header>
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+    <footer>
+        <div class="footer-section">
+            <h3>Kontakt</h3>
+            <p>Aline Stucki</p>
+            <p>📧 info@bernerfuechse.ch</p>
+            <p>📞 +41 31 123 45 67</p>
+            <p>📍 Bern, Schweiz</p>
+        </div>
+        <div class="footer-bottom">
+            <h3>Schulprojekt</h3>
+            <p>
+                Schulprojekt der Informatikmittelschule gibb, Schuljahr 2026/2027.
+                Dies ist keine offizielle Website eines realen Vereins,
+                sondern eine fiktive Projektarbeit.
+            </p>
+            <p>&copy; 2026 Berner Füchse</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,32 @@
+.logo{
+    height: 80px;
+    padding: 10px 20px;
+}
+
+.navbar {
+  display: flex;           
+  align-items: center;      
+  justify-content: center; 
+  padding: 10px 20px;
+  color: #FF6B00;
+}
+
+header{
+    background-color: #111827;
+}
+
+footer{
+    background-color: #0B1120;
+    color: #D1D5DB;
+}
+
+body{
+    background-color: #1F2937;
+    color: #9CA3AF;
+
+}
+
+header a {
+    color: #FF6B00;
+    text-decoration: none;
+}
