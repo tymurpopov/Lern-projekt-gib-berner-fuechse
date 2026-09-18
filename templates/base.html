@@ -6,8 +6,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <header class="navbar">
-        <nav>
+    <header>
+        <nav class="navbar">
             <a href="/">Home</a>
             <a href="/teams">Teams</a>
             <a href="/events">Events</a>
@@ -15,6 +15,9 @@
             <a href="/shop">Shop</a>
             <a href="/rules">Rules</a>
         </nav>
+        <button class="menu-toggle">
+            ☰
+        </button>
         <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Klub logo" class="logo">
     </header>
     <main>
@@ -39,5 +42,6 @@
             <p>&copy; 2026 Berner Füchse</p>
         </div>
     </footer>
+    <script src="{{ url_for('static', filename='js/menu.js') }}"></script>
 </body>
 </html>
