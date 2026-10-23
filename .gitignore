@@ -11,3 +11,5 @@ instance/
 *.db
 
 .DS_Store
+
+key.txt

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>Admin-Login</h1>
+
+    {% if error %}
+    <p role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('admin_login') }}">
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <div>
+            <label for="username">Benutzername</label>
+            <input
+                type="text"
+                id="username"
+                name="username"
+                autocomplete="username"
+                maxlength="80"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="password">Passwort</label>
+            <input
+                type="password"
+                id="password"
+                name="password"
+                autocomplete="current-password"
+                maxlength="1024"
+                required
+            >
+        </div>
+
+        <button type="submit">Anmelden</button>
+    </form>
+</section>
+{% endblock %}

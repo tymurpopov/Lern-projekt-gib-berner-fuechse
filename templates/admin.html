@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>Admin-Bereich</h1>
+    <p>Du bist als Administrator angemeldet.</p>
+
+    <h2>Geplante Verwaltung</h2>
+    <ul>
+        <li>Events</li>
+        <li>Mitglieder und Anträge</li>
+        <li>Teams</li>
+        <li>Shop-Produkte</li>
+    </ul>
+
+    <form method="post" action="{{ url_for('admin_logout') }}">
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <button type="submit">Abmelden</button>
+    </form>
+</section>
+{% endblock %}
