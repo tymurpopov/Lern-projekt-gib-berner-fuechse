@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>Events verwalten</h1>
+
+    <p>
+        <a href="{{ url_for('admin_event_create') }}">
+            Neues Event erstellen
+        </a>
+    </p>
+
+    {% for event in events %}
+    <article>
+        <h2>{{ event.title }}</h2>
+
+        <p>
+            {{ event.date.strftime('%d.%m.%Y') }},
+            {{ event.time.strftime('%H:%M') }} Uhr
+        </p>
+
+        <p>{{ event.location }} — {{ event.game }}</p>
+
+        <p>
+            <a href="{{ url_for('event', event_id=event.id) }}">
+                Ansehen
+            </a>
+
+            <a href="{{ url_for('admin_event_edit', event_id=event.id) }}">
+                Bearbeiten
+            </a>
+        </p>
+
+        <form
+            method="post"
+            action="{{ url_for('admin_event_delete', event_id=event.id) }}"
+            onsubmit="return confirm('Dieses Event wirklich löschen?');"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <button type="submit">Löschen</button>
+        </form>
+    </article>
+    {% else %}
+    <p>Es sind noch keine Events eingetragen.</p>
+    {% endfor %}
+
+    <p>
+        <a href="{{ url_for('admin_dashboard') }}">
+            Zurück zum Admin-Bereich
+        </a>
+    </p>
+</section>
+{% endblock %}

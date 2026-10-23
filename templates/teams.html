@@ -1,9 +1,42 @@
 {% extends "base.html" %}
 
-{% block title %}
-teams
-{% endblock %}
+{% block title %}Teams{% endblock %}
 
 {% block content %}
-<h1>Teams</h1>
+<section>
+    <h1>Unsere Teams</h1>
+
+    <p>
+        Hier stellen wir die Teams der Berner Füchse vor.
+        Fairplay, Teamgeist und Respekt stehen bei uns im Mittelpunkt.
+    </p>
+
+    {% for team in teams %}
+    <article>
+        <h2>{{ team.name }}</h2>
+
+        {% if team.image %}
+        <img
+            src="{{ url_for('static', filename=team.image) }}"
+            alt="Team {{ team.name }}"
+            loading="lazy"
+        >
+        {% endif %}
+
+        <p><strong>Spiel:</strong> {{ team.game }}</p>
+        <p><strong>Spielniveau:</strong> {{ team.level }}</p>
+        <p><strong>Mitglieder:</strong> {{ team.member_count }}</p>
+
+        <p>
+            {{ team.description or 'Weitere Informationen folgen.' }}
+        </p>
+    </article>
+    {% else %}
+    <p>Zurzeit sind keine Teams eingetragen.</p>
+    {% endfor %}
+
+    <p>
+        <a href="{{ url_for('teamform') }}">Team anmelden</a>
+    </p>
+</section>
 {% endblock %}

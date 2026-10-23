@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>
+        {{ 'Event bearbeiten' if event else 'Event erstellen' }}
+    </h1>
+
+    {% if error %}
+    <p role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form
+        method="post"
+        action="{{ url_for('admin_event_edit', event_id=event.id)
+                    if event else url_for('admin_event_create') }}"
+    >
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <div>
+            <label for="title">Titel</label>
+            <input
+                type="text"
+                id="title"
+                name="title"
+                value="{{ request.form.get('title', event.title if event else '') }}"
+                maxlength="150"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="date">Datum</label>
+            <input
+                type="date"
+                id="date"
+                name="date"
+                value="{{ request.form.get('date', event.date.isoformat() if event else '') }}"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="time">Zeit</label>
+            <input
+                type="time"
+                id="time"
+                name="time"
+                value="{{ request.form.get('time', event.time.strftime('%H:%M') if event else '') }}"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="location">Ort</label>
+            <input
+                type="text"
+                id="location"
+                name="location"
+                value="{{ request.form.get('location', event.location if event else '') }}"
+                maxlength="200"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="game">Spiel</label>
+            <input
+                type="text"
+                id="game"
+                name="game"
+                value="{{ request.form.get('game', event.game if event else '') }}"
+                maxlength="100"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="description">Beschreibung</label>
+            <textarea
+                id="description"
+                name="description"
+                rows="6"
+                maxlength="10000"
+            >{{ request.form.get('description', event.description if event else '') }}</textarea>
+        </div>
+
+        <button type="submit">Speichern</button>
+
+        <a href="{{ url_for('admin_events') }}">Abbrechen</a>
+    </form>
+</section>
+{% endblock %}

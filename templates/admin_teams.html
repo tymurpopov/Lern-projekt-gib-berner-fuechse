@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>Teams verwalten</h1>
+
+    <p>
+        <a href="{{ url_for('admin_team_create') }}">
+            Neues Team erstellen
+        </a>
+    </p>
+
+    {% for team in teams %}
+    <article>
+        <h2>{{ team.name }}</h2>
+
+        <p><strong>Spiel:</strong> {{ team.game }}</p>
+        <p><strong>Spielniveau:</strong> {{ team.level }}</p>
+        <p><strong>Mitglieder:</strong> {{ team.member_count }}</p>
+
+        <p>
+            <a href="{{ url_for('admin_team_edit', team_id=team.id) }}">
+                Bearbeiten
+            </a>
+        </p>
+
+        <form
+            method="post"
+            action="{{ url_for('admin_team_delete', team_id=team.id) }}"
+            onsubmit="return confirm('Dieses Team wirklich löschen?');"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <button type="submit">Löschen</button>
+        </form>
+    </article>
+    {% else %}
+    <p>Es sind noch keine Teams eingetragen.</p>
+    {% endfor %}
+
+    <p>
+        <a href="{{ url_for('teams') }}">Öffentliche Teamseite</a>
+    </p>
+
+    <p>
+        <a href="{{ url_for('admin_dashboard') }}">
+            Zurück zum Admin-Bereich
+        </a>
+    </p>
+</section>
+{% endblock %}

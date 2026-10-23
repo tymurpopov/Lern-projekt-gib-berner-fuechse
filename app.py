@@ -1,5 +1,5 @@
 from flask import Flask, render_template
-from models import db, Event, Team, Admin
+from models import db, Event, Team, Admin, TeamApplication
 from werkzeug.security import generate_password_hash, check_password_hash
 import click
 from flask import (
@@ -10,12 +10,14 @@ from flask import (
     url_for,
     session,
     abort,
+    flash,
 )
 import os
 import secrets
 import hmac
-from datetime import timedelta
+from datetime import timedelta, date, time, timezone
 from functools import wraps
+import re
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
@@ -33,6 +35,119 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///berner_fuechse.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
+
+class TeamApplication(db.Model):
+    __tablename__ = "team_applications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    game = db.Column(db.String(100), nullable=False)
+    player_count = db.Column(db.Integer, nullable=False)
+    captain_name = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(254), nullable=False)
+    notes = db.Column(db.Text, nullable=False, default="")
+    status = db.Column(db.String(20), nullable=False, default="pending")
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "player_count >= 1 AND player_count <= 1000",
+            name="check_application_player_count"
+        ),
+    )
+
+def read_event_form():
+    title = request.form.get("title", "").strip()
+    location = request.form.get("location", "").strip()
+    game = request.form.get("game", "").strip()
+    description = request.form.get("description", "").strip()
+
+    if not title or len(title) > 150:
+        raise ValueError("Der Titel muss 1 bis 150 Zeichen lang sein.")
+
+    if not location or len(location) > 200:
+        raise ValueError("Der Ort muss 1 bis 200 Zeichen lang sein.")
+
+    if not game or len(game) > 100:
+        raise ValueError("Das Spiel muss 1 bis 100 Zeichen lang sein.")
+
+    if len(description) > 10000:
+        raise ValueError("Die Beschreibung ist zu lang.")
+
+    try:
+        event_date = date.fromisoformat(
+            request.form.get("date", "")
+        )
+        event_time = time.fromisoformat(
+            request.form.get("time", "")
+        )
+    except ValueError:
+        raise ValueError("Bitte ein gültiges Datum und eine gültige Zeit eingeben.")
+
+    if event_time.tzinfo is not None:
+        raise ValueError("Bitte eine lokale Uhrzeit eingeben.")
+
+    return {
+        "title": title,
+        "date": event_date,
+        "time": event_time,
+        "location": location,
+        "game": game,
+        "description": description,
+    }
+
+def read_team_form():
+    name = request.form.get("name", "").strip()
+    game = request.form.get("game", "").strip()
+    level = request.form.get("level", "").strip()
+    description = request.form.get("description", "").strip()
+    image = request.form.get("image", "").strip()
+
+    if not name or len(name) > 150:
+        raise ValueError("Der Teamname muss 1 bis 150 Zeichen lang sein.")
+
+    if not game or len(game) > 100:
+        raise ValueError("Das Spiel muss 1 bis 100 Zeichen lang sein.")
+
+    if not level or len(level) > 100:
+        raise ValueError("Das Spielniveau muss 1 bis 100 Zeichen lang sein.")
+
+    try:
+        member_count = int(request.form.get("member_count", ""))
+    except ValueError:
+        raise ValueError("Bitte eine ganze Zahl für die Mitglieder eingeben.")
+
+    if not 0 <= member_count <= 1000:
+        raise ValueError("Die Mitgliederzahl muss zwischen 0 und 1000 liegen.")
+
+    if len(description) > 10000:
+        raise ValueError("Die Beschreibung ist zu lang.")
+
+    if image:
+        valid_image = re.fullmatch(
+            r"img/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)",
+            image,
+            flags=re.IGNORECASE
+        )
+
+        if len(image) > 255 or not valid_image:
+            raise ValueError(
+                "Bildpfad ungültig. Beispiel: img/team_alpha.jpg"
+            )
+
+    return {
+        "name": name,
+        "game": game,
+        "level": level,
+        "member_count": member_count,
+        "description": description,
+        "image": image or None,
+    }
 
 def admin_required(view):
     @wraps(view)
@@ -81,6 +196,189 @@ def check_csrf():
     ):
         abort(400)
 
+
+@app.route("/admin/teams")
+@admin_required
+def admin_teams():
+    statement = db.select(Team).order_by(Team.name)
+    all_teams = db.session.execute(statement).scalars().all()
+
+    return render_template(
+        "admin_teams.html",
+        teams=all_teams
+    )
+
+
+@app.route("/admin/teams/new", methods=["GET", "POST"])
+@admin_required
+def admin_team_create():
+    error = None
+
+    if request.method == "POST":
+        check_csrf()
+
+        try:
+            data = read_team_form()
+        except ValueError as exc:
+            error = str(exc)
+        else:
+            new_team = Team(**data)
+
+            db.session.add(new_team)
+            db.session.commit()
+
+            return redirect(url_for("admin_teams"))
+
+    return render_template(
+        "admin_team_form.html",
+        team=None,
+        error=error
+    )
+
+
+@app.route(
+    "/admin/teams/<int:team_id>/edit",
+    methods=["GET", "POST"]
+)
+@admin_required
+def admin_team_edit(team_id):
+    selected_team = db.get_or_404(Team, team_id)
+    error = None
+
+    if request.method == "POST":
+        check_csrf()
+
+        try:
+            data = read_team_form()
+        except ValueError as exc:
+            error = str(exc)
+        else:
+            selected_team.name = data["name"]
+            selected_team.game = data["game"]
+            selected_team.level = data["level"]
+            selected_team.member_count = data["member_count"]
+            selected_team.description = data["description"]
+            selected_team.image = data["image"]
+
+            db.session.commit()
+
+            return redirect(url_for("admin_teams"))
+
+    return render_template(
+        "admin_team_form.html",
+        team=selected_team,
+        error=error
+    )
+
+
+@app.route(
+    "/admin/teams/<int:team_id>/delete",
+    methods=["POST"]
+)
+@admin_required
+def admin_team_delete(team_id):
+    check_csrf()
+
+    selected_team = db.get_or_404(Team, team_id)
+
+    db.session.delete(selected_team)
+    db.session.commit()
+
+    return redirect(url_for("admin_teams"))
+
+
+@app.route("/admin/events")
+@admin_required
+def admin_events():
+    statement = db.select(Event).order_by(
+        Event.date,
+        Event.time
+    )
+    all_events = db.session.execute(statement).scalars().all()
+
+    return render_template(
+        "admin_events.html",
+        events=all_events
+    )
+
+
+@app.route("/admin/events/new", methods=["GET", "POST"])
+@admin_required
+def admin_event_create():
+    error = None
+
+    if request.method == "POST":
+        check_csrf()
+
+        try:
+            data = read_event_form()
+        except ValueError as exc:
+            error = str(exc)
+        else:
+            new_event = Event(**data)
+
+            db.session.add(new_event)
+            db.session.commit()
+
+            return redirect(url_for("admin_events"))
+
+    return render_template(
+        "admin_event_form.html",
+        event=None,
+        error=error
+    )
+
+
+@app.route(
+    "/admin/events/<int:event_id>/edit",
+    methods=["GET", "POST"]
+)
+@admin_required
+def admin_event_edit(event_id):
+    selected_event = db.get_or_404(Event, event_id)
+    error = None
+
+    if request.method == "POST":
+        check_csrf()
+
+        try:
+            data = read_event_form()
+        except ValueError as exc:
+            error = str(exc)
+        else:
+            selected_event.title = data["title"]
+            selected_event.date = data["date"]
+            selected_event.time = data["time"]
+            selected_event.location = data["location"]
+            selected_event.game = data["game"]
+            selected_event.description = data["description"]
+
+            db.session.commit()
+
+            return redirect(url_for("admin_events"))
+
+    return render_template(
+        "admin_event_form.html",
+        event=selected_event,
+        error=error
+    )
+
+
+@app.route(
+    "/admin/events/<int:event_id>/delete",
+    methods=["POST"]
+)
+@admin_required
+def admin_event_delete(event_id):
+    check_csrf()
+
+    selected_event = db.get_or_404(Event, event_id)
+
+    db.session.delete(selected_event)
+    db.session.commit()
+
+    return redirect(url_for("admin_events"))
+
 @app.cli.command("init-db")
 def init_db():
     db.create_all()
@@ -127,7 +425,10 @@ def home():
 
 @app.route("/teams")
 def teams():
-    return render_template("teams.html")
+    statement = db.select(Team).order_by(Team.name)
+    all_teams = db.session.execute(statement).scalars().all()
+
+    return render_template("teams.html", teams=all_teams)
 
 @app.route("/events")
 def events():
@@ -152,9 +453,87 @@ def rules():
 def join():
     return render_template("join.html")
 
-@app.route("/teamform")
+@app.route("/teamform", methods=["GET", "POST"])
 def teamform():
-    return render_template("teamform.html")
+    error = None
+
+    if request.method == "POST":
+        check_csrf()
+
+        name = request.form.get("name", "").strip()
+        game = request.form.get("game", "").strip()
+        captain_name = request.form.get("captain_name", "").strip()
+        email = request.form.get("email", "").strip()
+        notes = request.form.get("notes", "").strip()
+
+        try:
+            if not name or len(name) > 150:
+                raise ValueError(
+                    "Der Teamname muss 1 bis 150 Zeichen lang sein."
+                )
+
+            if not game or len(game) > 100:
+                raise ValueError(
+                    "Das Spiel muss 1 bis 100 Zeichen lang sein."
+                )
+
+            if not captain_name or len(captain_name) > 150:
+                raise ValueError(
+                    "Bitte den Namen der Kontaktperson eingeben."
+                )
+
+            if (
+                len(email) > 254
+                or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email)
+            ):
+                raise ValueError(
+                    "Bitte eine gültige E-Mail-Adresse eingeben."
+                )
+
+            try:
+                player_count = int(
+                    request.form.get("player_count", "")
+                )
+            except ValueError:
+                raise ValueError(
+                    "Bitte eine ganze Zahl für die Spielerzahl eingeben."
+                )
+
+            if not 1 <= player_count <= 1000:
+                raise ValueError(
+                    "Die Spielerzahl muss zwischen 1 und 1000 liegen."
+                )
+
+            if len(notes) > 5000:
+                raise ValueError(
+                    "Die Bemerkungen dürfen höchstens 5000 Zeichen enthalten."
+                )
+
+        except ValueError as exc:
+            error = str(exc)
+
+        else:
+            application = TeamApplication(
+                name=name,
+                game=game,
+                player_count=player_count,
+                captain_name=captain_name,
+                email=email,
+                notes=notes
+            )
+
+            db.session.add(application)
+            db.session.commit()
+
+            flash(
+                "Vielen Dank! Eure Teamanmeldung wurde gespeichert. "
+                "Sie wird vom Verein geprüft.",
+                "team_application_success"
+            )
+
+            return redirect(url_for("teamform"))
+
+    return render_template("teamform.html", error=error)
 
 
 @app.route("/register")

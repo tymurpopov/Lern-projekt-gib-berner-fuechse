@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>
+        {{ 'Team bearbeiten' if team else 'Team erstellen' }}
+    </h1>
+
+    {% if error %}
+    <p role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form
+        method="post"
+        action="{{ url_for('admin_team_edit', team_id=team.id)
+                    if team else url_for('admin_team_create') }}"
+    >
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <div>
+            <label for="name">Teamname</label>
+            <input
+                type="text"
+                id="name"
+                name="name"
+                value="{{ request.form.get('name', team.name if team else '') }}"
+                maxlength="150"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="game">Spiel</label>
+            <input
+                type="text"
+                id="game"
+                name="game"
+                value="{{ request.form.get('game', team.game if team else '') }}"
+                maxlength="100"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="level">Spielniveau</label>
+            <input
+                type="text"
+                id="level"
+                name="level"
+                value="{{ request.form.get('level', team.level if team else '') }}"
+                placeholder="Zum Beispiel: Anfänger"
+                maxlength="100"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="member_count">Mitgliederzahl</label>
+            <input
+                type="number"
+                id="member_count"
+                name="member_count"
+                value="{{ request.form.get('member_count', team.member_count if team else 0) }}"
+                min="0"
+                max="1000"
+                step="1"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="description">Beschreibung</label>
+            <textarea
+                id="description"
+                name="description"
+                rows="6"
+                maxlength="10000"
+            >{{ request.form.get('description', team.description if team else '') }}</textarea>
+        </div>
+
+        <div>
+            <label for="image">Bildpfad (optional)</label>
+            <input
+                type="text"
+                id="image"
+                name="image"
+                value="{{ request.form.get('image', (team.image or '') if team else '') }}"
+                placeholder="img/team_alpha.jpg"
+                maxlength="255"
+                aria-describedby="image-help"
+            >
+            <p id="image-help">
+                Das Bild muss bereits im Ordner static/img liegen.
+                Erlaubt: JPG, JPEG, PNG und WEBP.
+            </p>
+        </div>
+
+        <button type="submit">Speichern</button>
+
+        <a href="{{ url_for('admin_teams') }}">Abbrechen</a>
+    </form>
+</section>
+{% endblock %}

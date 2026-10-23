@@ -1,9 +1,116 @@
 {% extends "base.html" %}
 
-{% block title %}
-teamwork
-{% endblock %}
+{% block title %}Team anmelden{% endblock %}
 
 {% block content %}
-<h1>Teamwork</h1>
+<section>
+    <h1>Team anmelden</h1>
+
+    <p>
+        Ihr möchtet mit eurem Team den Berner Füchsen beitreten?
+        Sendet uns eine Anmeldung.
+        Das Team wird erst nach einer Prüfung veröffentlicht.
+    </p>
+
+    <p>
+        Dies ist ein Schulprojekt. Bitte verwendet für Tests
+        nur fiktive Kontaktdaten.
+    </p>
+
+    {% for message in get_flashed_messages(
+        category_filter=['team_application_success']
+    ) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
+
+    {% if error %}
+    <p role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('teamform') }}">
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <div>
+            <label for="name">Teamname</label>
+            <input
+                type="text"
+                id="name"
+                name="name"
+                value="{{ request.form.get('name', '') }}"
+                maxlength="150"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="game">Spiel</label>
+            <input
+                type="text"
+                id="game"
+                name="game"
+                value="{{ request.form.get('game', '') }}"
+                maxlength="100"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="player_count">Anzahl Spieler</label>
+            <input
+                type="number"
+                id="player_count"
+                name="player_count"
+                value="{{ request.form.get('player_count', '') }}"
+                min="1"
+                max="1000"
+                step="1"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="captain_name">Kontaktperson / Teamkapitän</label>
+            <input
+                type="text"
+                id="captain_name"
+                name="captain_name"
+                value="{{ request.form.get('captain_name', '') }}"
+                maxlength="150"
+                autocomplete="name"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="email">E-Mail</label>
+            <input
+                type="email"
+                id="email"
+                name="email"
+                value="{{ request.form.get('email', '') }}"
+                maxlength="254"
+                autocomplete="email"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="notes">Bemerkungen (optional)</label>
+            <textarea
+                id="notes"
+                name="notes"
+                rows="5"
+                maxlength="5000"
+            >{{ request.form.get('notes', '') }}</textarea>
+        </div>
+
+        <button type="submit">Anmeldung senden</button>
+
+        <a href="{{ url_for('teams') }}">Zurück zu den Teams</a>
+    </form>
+</section>
 {% endblock %}
