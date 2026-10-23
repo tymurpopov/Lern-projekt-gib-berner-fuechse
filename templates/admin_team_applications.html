@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>Teamanträge</h1>
+
+    {% for message in get_flashed_messages(
+        category_filter=['team_application_admin']
+    ) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
+
+    {% for application in applications %}
+    <article>
+        <h2>{{ application.name }}</h2>
+
+        <p><strong>Spiel:</strong> {{ application.game }}</p>
+        <p><strong>Spielerzahl:</strong> {{ application.player_count }}</p>
+        <p><strong>Kontaktperson:</strong> {{ application.captain_name }}</p>
+        <p><strong>E-Mail:</strong> {{ application.email }}</p>
+
+        <p>
+            <strong>Eingegangen am:</strong>
+            {{ application.created_at.strftime('%d.%m.%Y %H:%M') }} UTC
+        </p>
+
+        <p>
+            <strong>Bemerkungen:</strong>
+            {{ application.notes or 'Keine Bemerkungen.' }}
+        </p>
+
+        <p>
+            <strong>Status:</strong>
+
+            {% if application.status == 'pending' %}
+                Offen
+            {% elif application.status == 'approved' %}
+                Angenommen
+            {% elif application.status == 'rejected' %}
+                Abgelehnt
+            {% else %}
+                {{ application.status }}
+            {% endif %}
+        </p>
+
+        {% if application.status == 'pending' %}
+        <form
+            method="post"
+            action="{{ url_for(
+                'admin_team_application_approve',
+                application_id=application.id
+            ) }}"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <label for="level-{{ application.id }}">
+                Spielniveau des Teams
+            </label>
+
+            <input
+                type="text"
+                id="level-{{ application.id }}"
+                name="level"
+                placeholder="Zum Beispiel: Anfänger"
+                maxlength="100"
+                required
+            >
+
+            <button type="submit">
+                Annehmen und veröffentlichen
+            </button>
+        </form>
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'admin_team_application_reject',
+                application_id=application.id
+            ) }}"
+            onsubmit="return confirm('Diesen Antrag wirklich ablehnen?');"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <button type="submit">Ablehnen</button>
+        </form>
+        {% endif %}
+    </article>
+    {% else %}
+    <p>Es sind noch keine Teamanträge eingegangen.</p>
+    {% endfor %}
+
+    <p>
+        <a href="{{ url_for('admin_teams') }}">
+            Teams verwalten
+        </a>
+    </p>
+
+    <p>
+        <a href="{{ url_for('admin_dashboard') }}">
+            Zurück zum Admin-Bereich
+        </a>
+    </p>
+</section>
+{% endblock %}

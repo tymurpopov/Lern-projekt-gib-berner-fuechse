@@ -36,31 +36,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-class TeamApplication(db.Model):
-    __tablename__ = "team_applications"
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
-    game = db.Column(db.String(100), nullable=False)
-    player_count = db.Column(db.Integer, nullable=False)
-    captain_name = db.Column(db.String(150), nullable=False)
-    email = db.Column(db.String(254), nullable=False)
-    notes = db.Column(db.Text, nullable=False, default="")
-    status = db.Column(db.String(20), nullable=False, default="pending")
-
-    created_at = db.Column(
-        db.DateTime,
-        nullable=False,
-        default=lambda: datetime.now(timezone.utc)
-    )
-
-    __table_args__ = (
-        db.CheckConstraint(
-            "player_count >= 1 AND player_count <= 1000",
-            name="check_application_player_count"
-        ),
-    )
-
 def read_event_form():
     title = request.form.get("title", "").strip()
     location = request.form.get("location", "").strip()
@@ -590,6 +565,121 @@ def admin_logout():
     session.clear()
 
     return redirect(url_for("admin_login"))
+
+@app.route("/admin/team-applications")
+@admin_required
+def admin_team_applications():
+    statement = db.select(TeamApplication).order_by(
+        TeamApplication.created_at.desc(),
+        TeamApplication.id.desc()
+    )
+
+    applications = db.session.execute(statement).scalars().all()
+
+    return render_template(
+        "admin_team_applications.html",
+        applications=applications
+    )
+
+
+@app.route(
+    "/admin/team-applications/<int:application_id>/approve",
+    methods=["POST"]
+)
+@admin_required
+def admin_team_application_approve(application_id):
+    check_csrf()
+
+    application = db.get_or_404(TeamApplication, application_id)
+
+    level = request.form.get("level", "").strip()
+
+    if not level or len(level) > 100:
+        flash(
+            "Bitte ein Spielniveau mit 1 bis 100 Zeichen eingeben.",
+            "team_application_admin"
+        )
+        return redirect(url_for("admin_team_applications"))
+
+    # Только ожидающую заявку можно принять.
+    # Условное обновление защищает от повторного принятия.
+    statement = (
+        db.update(TeamApplication)
+        .where(
+            TeamApplication.id == application_id,
+            TeamApplication.status == "pending"
+        )
+        .values(status="approved")
+    )
+
+    result = db.session.execute(statement)
+
+    if result.rowcount != 1:
+        db.session.rollback()
+
+        flash(
+            "Dieser Antrag wurde bereits bearbeitet.",
+            "team_application_admin"
+        )
+        return redirect(url_for("admin_team_applications"))
+
+    new_team = Team(
+        name=application.name,
+        game=application.game,
+        level=level,
+        member_count=application.player_count,
+        description="",
+        image=None
+    )
+
+    db.session.add(new_team)
+    db.session.commit()
+
+    flash(
+        "Der Antrag wurde angenommen. Das Team ist jetzt veröffentlicht.",
+        "team_application_admin"
+    )
+
+    return redirect(url_for("admin_team_applications"))
+
+
+@app.route(
+    "/admin/team-applications/<int:application_id>/reject",
+    methods=["POST"]
+)
+@admin_required
+def admin_team_application_reject(application_id):
+    check_csrf()
+
+    db.get_or_404(TeamApplication, application_id)
+
+    statement = (
+        db.update(TeamApplication)
+        .where(
+            TeamApplication.id == application_id,
+            TeamApplication.status == "pending"
+        )
+        .values(status="rejected")
+    )
+
+    result = db.session.execute(statement)
+
+    if result.rowcount != 1:
+        db.session.rollback()
+
+        flash(
+            "Dieser Antrag wurde bereits bearbeitet.",
+            "team_application_admin"
+        )
+    else:
+        db.session.commit()
+
+        flash(
+            "Der Antrag wurde abgelehnt.",
+            "team_application_admin"
+        )
+
+    return redirect(url_for("admin_team_applications"))
 
 if __name__ == "__main__":
     app.run(debug=True)

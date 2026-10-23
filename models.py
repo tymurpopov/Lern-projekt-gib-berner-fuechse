@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, timezone
 
 db = SQLAlchemy()
 
@@ -46,3 +47,28 @@ class Admin(db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+class TeamApplication(db.Model):
+    __tablename__ = "team_applications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    game = db.Column(db.String(100), nullable=False)
+    player_count = db.Column(db.Integer, nullable=False)
+    captain_name = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(254), nullable=False)
+    notes = db.Column(db.Text, nullable=False, default="")
+    status = db.Column(db.String(20), nullable=False, default="pending")
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "player_count >= 1 AND player_count <= 1000",
+            name="check_application_player_count"
+        ),
+    )
