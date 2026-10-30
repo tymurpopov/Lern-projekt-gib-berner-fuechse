@@ -8,6 +8,18 @@
 
     <p><strong>Spiel:</strong> {{ profile.game }}</p>
 
+    <h2>Teams</h2>
+
+    {% if member.teams %}
+    <ul>
+        {% for team in member.teams %}
+        <li>{{ team.name }} — {{ team.game }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>Noch keinem Team zugeteilt.</p>
+    {% endif %}
+
     {% if profile.role %}
     <p><strong>Rolle:</strong> {{ profile.role }}</p>
     {% endif %}

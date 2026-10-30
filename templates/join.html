@@ -23,7 +23,14 @@
     {% endfor %}
 
     {% if error %}
-    <p role="alert">{{ error }}</p>
+    <div
+        role="alert"
+        style="background: #7f1d1d; color: #fff; padding: 16px;
+            margin: 20px 0; border: 2px solid #f87171;"
+    >
+        <strong>Antrag nicht gespeichert:</strong>
+        {{ error }}
+    </div>
     {% endif %}
 
     <form method="post" action="{{ url_for('join') }}">
@@ -91,8 +98,8 @@
                     {% endif %}
                 >
                 Nach der Annahme dürfen mein Nickname, Spiel,
-                meine Rolle und mein angegebener Profil-Link
-                öffentlich angezeigt werden.
+                meine Rolle, meine Teamzugehörigkeit und mein angegebener
+                Profil-Link öffentlich angezeigt werden.
             </label>
         </div>
 

@@ -4,6 +4,23 @@ from datetime import datetime, timezone
 
 db = SQLAlchemy()
 
+member_teams = db.Table(
+    "member_teams",
+
+    db.Column(
+        "member_id",
+        db.Integer,
+        db.ForeignKey("members.id"),
+        primary_key=True
+    ),
+
+    db.Column(
+        "team_id",
+        db.Integer,
+        db.ForeignKey("teams.id"),
+        primary_key=True
+    ),
+)
 
 class Event(db.Model):
     __tablename__ = "events"
@@ -136,4 +153,11 @@ class Member(db.Model):
     application = db.relationship(
         "MemberApplication",
         backref=db.backref("member", uselist=False)
+    )
+
+    teams = db.relationship(
+        "Team",
+        secondary=member_teams,
+        backref=db.backref("members"),
+        order_by="Team.name"
     )

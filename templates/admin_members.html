@@ -67,6 +67,24 @@
                     name="csrf_token"
                     value="{{ csrf_token() }}"
                 >
+                <fieldset>
+                    <legend>Teams zuordnen (optional)</legend>
+
+                    {% for team in teams %}
+                    <div>
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="team_ids"
+                                value="{{ team.id }}"
+                            >
+                            {{ team.name }} — {{ team.game }}
+                        </label>
+                    </div>
+                    {% else %}
+                    <p>Es sind noch keine Teams angelegt.</p>
+                    {% endfor %}
+                </fieldset>
 
                 <button type="submit" class="action-button">
                     Annehmen
@@ -98,6 +116,46 @@
         {% endif %}
 
         {% set member = members_by_application.get(application.id) %}
+
+        {% if member and application.status == 'approved' %}
+        <form
+            method="post"
+            action="{{ url_for(
+                'admin_member_teams_save',
+                member_id=member.id
+            ) }}"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <fieldset>
+                <legend>Teams des Mitglieds</legend>
+
+                {% for team in teams %}
+                <div>
+                    <label>
+                        <input
+                            type="checkbox"
+                            name="team_ids"
+                            value="{{ team.id }}"
+                            {% if team in member.teams %}checked{% endif %}
+                        >
+                        {{ team.name }} — {{ team.game }}
+                    </label>
+                </div>
+                {% else %}
+                <p>Es sind noch keine Teams angelegt.</p>
+                {% endfor %}
+            </fieldset>
+
+            <button type="submit" class="action-button">
+                Teams speichern
+            </button>
+        </form>
+        {% endif %}
 
         {% if member and application.status == 'approved'
            and application.publish_profile %}

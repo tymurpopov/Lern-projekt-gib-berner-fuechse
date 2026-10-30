@@ -1,15 +1,58 @@
 {% extends "base.html" %}
 
-{% block title %}
-membership
-{% endblock %}
+{% block title %}Mitgliedschaft{% endblock %}
 
 {% block content %}
-<h1>Membership</h1>
+<section>
+    <h1>Mitgliedschaft</h1>
 
-<p>
-    <a class="action-button" href="{{ url_for('join') }}">
-        Mitglied werden
-    </a>
-</p>
+    <p>
+        <a class="action-button" href="{{ url_for('join') }}">
+            Mitglied werden
+        </a>
+    </p>
+</section>
+
+<section>
+    <h2>Unsere Mitglieder</h2>
+
+    {% for member in members %}
+    <article>
+        <h3>{{ member.application.nickname }}</h3>
+
+        <p>
+            <strong>Spiel:</strong>
+            {{ member.application.game }}
+        </p>
+
+        {% if member.application.role %}
+        <p>
+            <strong>Rolle:</strong>
+            {{ member.application.role }}
+        </p>
+        {% endif %}
+
+        <p><strong>Teams:</strong></p>
+
+        {% if member.teams %}
+        <ul>
+            {% for team in member.teams %}
+            <li>{{ team.name }} — {{ team.game }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p>Noch keinem Team zugeteilt.</p>
+        {% endif %}
+
+        <a
+            class="action-button"
+            href="{{ url_for('member_profile', member_id=member.id) }}"
+        >
+            Spielerprofil ansehen
+        </a>
+    </article>
+    {% else %}
+    <p>Zurzeit sind keine öffentlichen Spielerprofile verfügbar.</p>
+    {% endfor %}
+</section>
 {% endblock %}

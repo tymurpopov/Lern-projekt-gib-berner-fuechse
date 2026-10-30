@@ -78,6 +78,28 @@ def read_event_form():
         "description": description,
     }
 
+def read_selected_teams():
+    raw_ids = request.form.getlist("team_ids")
+
+    try:
+        team_ids = {int(value) for value in raw_ids}
+    except ValueError:
+        raise ValueError("Die Teamauswahl ist ungültig.")
+
+    if not team_ids:
+        return []
+
+    selected_teams = db.session.execute(
+        db.select(Team).where(Team.id.in_(team_ids))
+    ).scalars().all()
+
+    if len(selected_teams) != len(team_ids):
+        raise ValueError(
+            "Mindestens ein ausgewähltes Team existiert nicht mehr."
+        )
+
+    return selected_teams
+
 def read_team_form():
     name = request.form.get("name", "").strip()
     game = request.form.get("game", "").strip()
@@ -173,6 +195,33 @@ def check_csrf():
     ):
         abort(400)
 
+@app.route(
+    "/admin/members/<int:member_id>/teams",
+    methods=["POST"]
+)
+@admin_required
+def admin_member_teams_save(member_id):
+    check_csrf()
+
+    member = db.get_or_404(Member, member_id)
+
+    if member.application.status != "approved":
+        abort(409)
+
+    try:
+        selected_teams = read_selected_teams()
+    except ValueError as exc:
+        flash(str(exc), "member_application_admin")
+    else:
+        member.teams = selected_teams
+        db.session.commit()
+
+        flash(
+            "Die Teamzuordnung wurde gespeichert.",
+            "member_application_admin"
+        )
+
+    return redirect(url_for("admin_member_applications"))
 
 @app.route("/admin/teams")
 @admin_required
@@ -204,10 +253,15 @@ def admin_member_applications():
         for member in members
     }
 
+    teams = db.session.execute(
+        db.select(Team).order_by(Team.name)
+    ).scalars().all()
+
     return render_template(
         "admin_members.html",
         applications=applications,
-        members_by_application=members_by_application
+        members_by_application=members_by_application,
+        teams=teams
     )
 
 @app.route(
@@ -222,6 +276,13 @@ def admin_member_application_approve(application_id):
         MemberApplication,
         application_id
     )
+
+    try:
+        selected_teams = read_selected_teams()
+    except ValueError as exc:
+        flash(str(exc), "member_application_admin")
+
+        return redirect(url_for("admin_member_applications"))
 
     statement = (
         db.update(MemberApplication)
@@ -246,7 +307,8 @@ def admin_member_application_approve(application_id):
 
     member = Member(
         application_id=application.id,
-        nickname_key=application.nickname.strip().casefold()
+        nickname_key=application.nickname.strip().casefold(),
+        teams=selected_teams
     )
 
     db.session.add(member)
@@ -322,7 +384,8 @@ def member_profile(member_id):
 
     return render_template(
         "member.html",
-        profile=application
+        profile=application,
+        member=member
     )
 
 @app.route("/admin/teams/new", methods=["GET", "POST"])
@@ -555,7 +618,22 @@ def events():
 
 @app.route("/membership")
 def membership():
-    return render_template("membership.html")
+    statement = (
+        db.select(Member)
+        .join(MemberApplication)
+        .where(
+            MemberApplication.status == "approved",
+            MemberApplication.publish_profile.is_(True)
+        )
+        .order_by(Member.nickname_key)
+    )
+
+    members = db.session.execute(statement).scalars().all()
+
+    return render_template(
+        "membership.html",
+        members=members
+    )
 
 @app.route("/shop")
 def shop():
@@ -660,8 +738,12 @@ def join():
                         and parsed.username is None
                         and parsed.password is None
                     )
-                except ValueError:
-                    valid_profile = False
+                except ValueError as exc:
+                    error = str(exc)
+                    app.logger.warning(
+                        "Mitgliedsantrag nicht gespeichert: %s",
+                        error
+                    )
 
                 if not valid_profile:
                     raise ValueError(
