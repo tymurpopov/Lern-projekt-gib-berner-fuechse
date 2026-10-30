@@ -108,9 +108,18 @@
             >{{ request.form.get('notes', '') }}</textarea>
         </div>
 
-        <button type="submit">Anmeldung senden</button>
+        <div class="action-group">
+            <button type="submit" class="action-button">
+                Anmeldung senden
+            </button>
 
-        <a href="{{ url_for('teams') }}">Zurück zu den Teams</a>
+            <a
+                class="action-button action-button--secondary"
+                href="{{ url_for('teams') }}"
+            >
+                Zurück zu den Teams
+            </a>
+        </div>
     </form>
 </section>
 {% endblock %}

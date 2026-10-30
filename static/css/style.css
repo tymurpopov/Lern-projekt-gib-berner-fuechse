@@ -81,3 +81,53 @@ img {
         display: flex;
     }
 }
+
+.action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-height: 44px;
+    padding: 12px 20px;
+    border: 2px solid #FF6B00;
+    border-radius: 8px;
+    background-color: #FF6B00;
+    color: #111827;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.4;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.action-button:hover {
+    background-color: #FF8A33;
+    border-color: #FF8A33;
+}
+
+.action-button:focus-visible {
+    outline: 3px solid #F9FAFB;
+    outline-offset: 3px;
+}
+
+.action-button--secondary {
+    background-color: transparent;
+    color: #FF6B00;
+}
+
+.action-button--secondary:hover {
+    background-color: #111827;
+    border-color: #FF8A33;
+}
+
+.action-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-top: 16px;
+}

@@ -28,7 +28,10 @@
         <p><strong>Ort:</strong> {{ event.location }}</p>
         <p><strong>Spiel:</strong> {{ event.game }}</p>
 
-        <a href="{{ url_for('event', event_id=event.id) }}">
+        <a
+            class="action-button"
+            href="{{ url_for('event', event_id=event.id) }}"
+        >
             Details ansehen
         </a>
     </article>

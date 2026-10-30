@@ -35,8 +35,8 @@
     <p>Zurzeit sind keine Teams eingetragen.</p>
     {% endfor %}
 
-    <p>
-        <a href="{{ url_for('teamform') }}">Team anmelden</a>
-    </p>
+    <a class="action-button" href="{{ url_for('teamform') }}">
+        Team anmelden
+    </a>
 </section>
 {% endblock %}

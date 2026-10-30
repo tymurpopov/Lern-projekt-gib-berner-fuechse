@@ -22,6 +22,11 @@
     <h2>Beschreibung</h2>
     <p>{{ event.description or 'Weitere Informationen folgen.' }}</p>
 
-    <a href="{{ url_for('events') }}">Zurück zu den Events</a>
+    <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('events') }}"
+        >
+            Zurück zu den Events
+        </a>
 </article>
 {% endblock %}
