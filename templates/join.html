@@ -33,7 +33,11 @@
     </div>
     {% endif %}
 
-    <form method="post" action="{{ url_for('join') }}">
+    <form
+        method="post"
+        action="{{ url_for('join') }}"
+        enctype="multipart/form-data"
+    >
         <input
             type="hidden"
             name="csrf_token"
@@ -101,6 +105,24 @@
                 meine Rolle, meine Teamzugehörigkeit und mein angegebener
                 Profil-Link öffentlich angezeigt werden.
             </label>
+        </div>
+
+        <div>
+            <label for="photo">Dein Foto (optional)</label>
+
+            <input
+                type="file"
+                id="photo"
+                name="photo"
+                accept="image/jpeg,image/png,image/webp"
+                aria-describedby="photo-help"
+            >
+
+            <p id="photo-help">
+                Nach der Annahme dürfen mein Nickname, mein hochgeladenes Foto,
+                Spiel, meine Rolle, meine Teamzugehörigkeit und mein angegebener
+                Profil-Link öffentlich angezeigt werden.
+            </p>
         </div>
 
         <p>

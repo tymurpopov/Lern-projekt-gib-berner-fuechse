@@ -75,6 +75,16 @@ class TeamApplication(db.Model):
     captain_name = db.Column(db.String(150), nullable=False)
     email = db.Column(db.String(254), nullable=False)
     notes = db.Column(db.Text, nullable=False, default="")
+    photo_filename = db.Column(
+        db.String(255),
+        nullable=True
+    )
+
+    team_id = db.Column(
+        db.Integer,
+        db.ForeignKey("teams.id"),
+        nullable=True
+    )
     status = db.Column(db.String(20), nullable=False, default="pending")
 
     created_at = db.Column(
@@ -113,6 +123,16 @@ class MemberApplication(db.Model):
     )
 
     notes = db.Column(db.Text, nullable=False, default="")
+
+    photo_filename = db.Column(
+        db.String(255),
+        nullable=True
+    )
+
+    photo_filename = db.Column(
+        db.String(255),
+        nullable=True
+    )
 
     publish_profile = db.Column(
         db.Boolean,

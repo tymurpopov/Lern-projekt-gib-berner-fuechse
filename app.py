@@ -11,6 +11,7 @@ from flask import (
     session,
     abort,
     flash,
+    send_from_directory,
 )
 import os
 import secrets
@@ -20,6 +21,19 @@ from functools import wraps
 import re
 from urllib.parse import urlsplit
 from sqlalchemy.exc import IntegrityError
+import sqlite3
+from pathlib import Path
+from contextlib import closing
+from sqlalchemy import inspect, text
+import warnings
+from io import BytesIO
+from PIL import Image, ImageOps, UnidentifiedImageError
+import shutil
+import sqlite3
+from pathlib import Path
+from contextlib import closing
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
@@ -37,6 +51,319 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///berner_fuechse.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
+
+def public_member_photo_folder():
+    return Path(app.static_folder) / "img" / "mitglieder"
+
+def team_photo_folder():
+    return Path(app.instance_path) / "pending_uploads" / "teams"
+
+
+def save_team_photo(upload):
+    if upload is None or not upload.filename:
+        return None
+
+    max_size = 5 * 1024 * 1024
+    content = upload.stream.read(max_size + 1)
+
+    if not content:
+        raise ValueError("Die ausgewählte Bilddatei ist leer.")
+
+    if len(content) > max_size:
+        raise ValueError("Das Teambild darf höchstens 5 MB groß sein.")
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "error",
+                Image.DecompressionBombWarning
+            )
+
+            with Image.open(BytesIO(content)) as original:
+                if original.format not in {"JPEG", "PNG", "WEBP"}:
+                    raise ValueError(
+                        "Bitte ein JPG-, PNG- oder WEBP-Bild auswählen."
+                    )
+
+                if original.width * original.height > 12_000_000:
+                    raise ValueError(
+                        "Das Bild darf höchstens 12 Megapixel haben."
+                    )
+
+                original.load()
+
+                photo = ImageOps.exif_transpose(original).convert("RGBA")
+
+    except (
+        UnidentifiedImageError,
+        OSError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning
+    ):
+        raise ValueError(
+            "Die Datei konnte nicht als gültiges Bild gelesen werden."
+        )
+
+    photo.thumbnail((1200, 1200))
+    photo.info.clear()
+
+    folder = team_photo_folder()
+    folder.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{secrets.token_hex(16)}.png"
+    photo.save(folder / filename, format="PNG")
+
+    return filename
+
+def publish_team_photo(application):
+    if application.status != "approved" or not application.team_id:
+        raise ValueError("Der Antrag ist keinem angenommenen Team zugeordnet.")
+
+    if not application.photo_filename:
+        return False
+
+    team = db.session.get(Team, application.team_id)
+
+    if team is None:
+        raise ValueError("Das zugehörige Team existiert nicht mehr.")
+
+    filename = application.photo_filename
+
+    if not re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+        raise ValueError("Der gespeicherte Bilddateiname ist ungültig.")
+
+    public_folder = Path(app.static_folder) / "img" / "teams"
+    source = team_photo_folder() / filename
+    destination = public_folder / filename
+
+    public_folder.mkdir(parents=True, exist_ok=True)
+
+    created_copy = False
+
+    try:
+        if not destination.is_file():
+            if not source.is_file():
+                raise FileNotFoundError(
+                    "Das eingereichte Teambild wurde nicht gefunden."
+                )
+
+            created_copy = True
+            shutil.copyfile(source, destination)
+
+        team.image = f"img/teams/{filename}"
+        db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+
+        if created_copy:
+            destination.unlink(missing_ok=True)
+
+        raise
+
+    return True
+
+def public_member_photo(application):
+    if (
+        application.status != "approved"
+        or not application.publish_profile
+        or not application.photo_filename
+    ):
+        return None
+
+    filename = application.photo_filename
+
+    if not re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+        return None
+
+    photo_path = public_member_photo_folder() / filename
+
+    if not photo_path.is_file():
+        return None
+
+    return filename
+
+
+def publish_member_photo(application):
+    if (
+        application.status != "approved"
+        or not application.publish_profile
+        or not application.photo_filename
+    ):
+        return False
+
+    filename = application.photo_filename
+
+    if not re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+        raise ValueError("Der gespeicherte Fotodateiname ist ungültig.")
+
+    folder = public_member_photo_folder()
+    destination = folder / filename
+
+    if destination.is_file():
+        return True
+
+    source = member_photo_folder() / filename
+
+    if not source.is_file():
+        raise FileNotFoundError("Das eingereichte Foto wurde nicht gefunden.")
+
+    folder.mkdir(parents=True, exist_ok=True)
+
+    try:
+        shutil.copyfile(source, destination)
+    except OSError:
+        destination.unlink(missing_ok=True)
+        raise
+
+    return True
+
+@app.route(
+    "/admin/team-applications/<int:application_id>/photo"
+)
+
+def admin_required(view):
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+        admin_id = session.get("admin_id")
+
+        if not isinstance(admin_id, int):
+            return redirect(url_for("admin_login"))
+
+        admin = db.session.get(Admin, admin_id)
+
+        if admin is None:
+            session.clear()
+            return redirect(url_for("admin_login"))
+
+        return view(*args, **kwargs)
+
+    return wrapped_view
+
+@admin_required
+def admin_team_application_photo(application_id):
+    application = db.get_or_404(
+        TeamApplication,
+        application_id
+    )
+
+    if not application.photo_filename:
+        abort(404)
+
+    response = send_from_directory(
+        str(team_photo_folder()),
+        application.photo_filename
+    )
+
+    response.headers["Cache-Control"] = "private, no-store"
+
+    return response
+
+
+@app.route(
+    "/admin/team-applications/<int:application_id>/publish-photo",
+    methods=["POST"]
+)
+@admin_required
+def admin_team_photo_publish(application_id):
+    check_csrf()
+
+    application = db.get_or_404(
+        TeamApplication,
+        application_id
+    )
+
+    if (
+        application.status != "approved"
+        or not application.team_id
+        or not application.photo_filename
+    ):
+        abort(409)
+
+    try:
+        publish_team_photo(application)
+    except (OSError, ValueError, SQLAlchemyError):
+        app.logger.exception(
+            "Teamfotoveröffentlichung fehlgeschlagen: Antrag %s",
+            application.id
+        )
+
+        flash(
+            "Das Teambild konnte nicht veröffentlicht werden. "
+            "Bitte den Server-Log prüfen.",
+            "team_application_admin"
+        )
+    else:
+        flash(
+            "Das Teambild wurde veröffentlicht.",
+            "team_application_admin"
+        )
+
+    return redirect(url_for("admin_team_applications"))
+
+@app.cli.command("add-team-photo")
+def add_team_photo():
+    inspector = inspect(db.engine)
+
+    if not inspector.has_table("team_applications"):
+        raise click.ClickException(
+            "Die Tabelle team_applications fehlt. "
+            "Führe zuerst init-db aus."
+        )
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("team_applications")
+    }
+
+    changes = [
+        (
+            "photo_filename",
+            "ALTER TABLE team_applications "
+            "ADD COLUMN photo_filename VARCHAR(255)"
+        ),
+        (
+            "team_id",
+            "ALTER TABLE team_applications "
+            "ADD COLUMN team_id INTEGER REFERENCES teams(id)"
+        ),
+    ]
+
+    missing_changes = [
+        sql
+        for column_name, sql in changes
+        if column_name not in columns
+    ]
+
+    if not missing_changes:
+        click.echo("Die Team-Fotofelder sind bereits vorhanden.")
+        return
+
+    database_path = Path(db.engine.url.database)
+
+    backup_folder = Path(app.instance_path) / "backups"
+    backup_folder.mkdir(parents=True, exist_ok=True)
+
+    backup_path = backup_folder / (
+        f"before_team_photo_{secrets.token_hex(8)}.db"
+    )
+
+    with closing(sqlite3.connect(str(database_path))) as source:
+        with closing(sqlite3.connect(str(backup_path))) as destination:
+            source.backup(destination)
+
+    with db.engine.begin() as connection:
+        for sql in missing_changes:
+            connection.execute(text(sql))
+
+    click.echo(f"Backup erstellt: {backup_path}")
+    click.echo("Team-Fotofelder erfolgreich hinzugefügt.")
+
+@app.context_processor
+def member_photo_helpers():
+    return {
+        "public_member_photo": public_member_photo
+    }
 
 def read_event_form():
     title = request.form.get("title", "").strip()
@@ -77,6 +404,66 @@ def read_event_form():
         "game": game,
         "description": description,
     }
+
+def member_photo_folder():
+    return Path(app.instance_path) / "pending_uploads" / "mitglieder"
+
+
+def save_member_photo(upload):
+    if upload is None or not upload.filename:
+        return None
+
+    max_size = 5 * 1024 * 1024
+    content = upload.stream.read(max_size + 1)
+
+    if not content:
+        raise ValueError("Die ausgewählte Fotodatei ist leer.")
+
+    if len(content) > max_size:
+        raise ValueError("Das Foto darf höchstens 5 MB groß sein.")
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "error",
+                Image.DecompressionBombWarning
+            )
+
+            with Image.open(BytesIO(content)) as original:
+                if original.format not in {"JPEG", "PNG", "WEBP"}:
+                    raise ValueError(
+                        "Bitte ein JPG-, PNG- oder WEBP-Bild auswählen."
+                    )
+
+                if original.width * original.height > 12_000_000:
+                    raise ValueError(
+                        "Das Foto darf höchstens 12 Megapixel haben."
+                    )
+
+                original.load()
+
+                photo = ImageOps.exif_transpose(original).convert("RGB")
+
+    except (
+        UnidentifiedImageError,
+        OSError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning
+    ):
+        raise ValueError(
+            "Die Datei konnte nicht als gültiges Bild gelesen werden."
+        )
+
+    photo.thumbnail((1200, 1200))
+    photo.info.clear()
+
+    folder = member_photo_folder()
+    folder.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{secrets.token_hex(16)}.png"
+    photo.save(folder / filename, format="PNG")
+
+    return filename
 
 def read_selected_teams():
     raw_ids = request.form.getlist("team_ids")
@@ -129,15 +516,14 @@ def read_team_form():
 
     if image:
         valid_image = re.fullmatch(
-            r"img/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)",
+            r"img/(?:teams/)?[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)",
             image,
             flags=re.IGNORECASE
         )
 
-        if len(image) > 255 or not valid_image:
-            raise ValueError(
-                "Bildpfad ungültig. Beispiel: img/team_alpha.jpg"
-            )
+        raise ValueError(
+        "Bildpfad ungültig. Beispiel: img/teams/team_alpha.jpg"
+        )
 
     return {
         "name": name,
@@ -148,23 +534,6 @@ def read_team_form():
         "image": image or None,
     }
 
-def admin_required(view):
-    @wraps(view)
-    def wrapped_view(*args, **kwargs):
-        admin_id = session.get("admin_id")
-
-        if not isinstance(admin_id, int):
-            return redirect(url_for("admin_login"))
-
-        admin = db.session.get(Admin, admin_id)
-
-        if admin is None:
-            session.clear()
-            return redirect(url_for("admin_login"))
-
-        return view(*args, **kwargs)
-
-    return wrapped_view
 
 
 def csrf_token():
@@ -176,6 +545,48 @@ def csrf_token():
 
     return token
 
+@app.cli.command("add-member-photo")
+def add_member_photo():
+    inspector = inspect(db.engine)
+
+    if not inspector.has_table("member_applications"):
+        raise click.ClickException(
+            "Die Tabelle member_applications fehlt. "
+            "Führe zuerst init-db aus."
+        )
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("member_applications")
+    }
+
+    if "photo_filename" in columns:
+        click.echo("Die Fotospalte ist bereits vorhanden.")
+        return
+
+    database_path = Path(db.engine.url.database)
+
+    backup_folder = Path(app.instance_path) / "backups"
+    backup_folder.mkdir(parents=True, exist_ok=True)
+
+    backup_path = backup_folder / (
+        f"before_member_photo_{secrets.token_hex(8)}.db"
+    )
+
+    with closing(sqlite3.connect(str(database_path))) as source:
+        with closing(sqlite3.connect(str(backup_path))) as destination:
+            source.backup(destination)
+
+    with db.engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE member_applications "
+                "ADD COLUMN photo_filename VARCHAR(255)"
+            )
+        )
+
+    click.echo(f"Backup erstellt: {backup_path}")
+    click.echo("Fotospalte erfolgreich hinzugefügt.")
 
 @app.context_processor
 def security_helpers():
@@ -325,8 +736,63 @@ def admin_member_application_approve(application_id):
             "member_application_admin"
         )
     else:
+        try:
+            publish_member_photo(application)
+        except (OSError, ValueError):
+            app.logger.exception(
+                "Fotoveröffentlichung fehlgeschlagen: Antrag %s",
+                application.id
+            )
+
+            flash(
+                "Der Antrag wurde angenommen, aber das Foto "
+                "konnte noch nicht veröffentlicht werden.",
+                "member_application_admin"
+            )
+        else:
+            flash(
+                "Der Mitgliedsantrag wurde angenommen.",
+                "member_application_admin"
+            )
+
+    return redirect(url_for("admin_member_applications"))
+
+@app.route(
+    "/admin/member-applications/<int:application_id>/publish-photo",
+    methods=["POST"]
+)
+@admin_required
+def admin_member_photo_publish(application_id):
+    check_csrf()
+
+    application = db.get_or_404(
+        MemberApplication,
+        application_id
+    )
+
+    if (
+        application.status != "approved"
+        or not application.publish_profile
+        or not application.photo_filename
+    ):
+        abort(409)
+
+    try:
+        publish_member_photo(application)
+    except (OSError, ValueError):
+        app.logger.exception(
+            "Fotoveröffentlichung fehlgeschlagen: Antrag %s",
+            application.id
+        )
+
         flash(
-            "Der Mitgliedsantrag wurde angenommen.",
+            "Das Foto konnte nicht veröffentlicht werden. "
+            "Bitte den Server-Log prüfen.",
+            "member_application_admin"
+        )
+    else:
+        flash(
+            "Das Foto wurde veröffentlicht.",
             "member_application_admin"
         )
 
@@ -563,6 +1029,49 @@ def init_db():
     db.create_all()
     print("Datenbank bereit: instance/berner_fuechse.db")
 
+@app.cli.command("add-member-photo")
+def add_member_photo():
+    inspector = inspect(db.engine)
+
+    if not inspector.has_table("member_applications"):
+        raise click.ClickException(
+            "Die Tabelle member_applications fehlt. "
+            "Führe zuerst init-db aus."
+        )
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("member_applications")
+    }
+
+    if "photo_filename" in columns:
+        click.echo("Die Fotospalte ist bereits vorhanden.")
+        return
+
+    database_path = Path(db.engine.url.database)
+
+    backup_folder = Path(app.instance_path) / "backups"
+    backup_folder.mkdir(parents=True, exist_ok=True)
+
+    backup_path = backup_folder / (
+        f"before_member_photo_{secrets.token_hex(8)}.db"
+    )
+
+    with closing(sqlite3.connect(str(database_path))) as source:
+        with closing(sqlite3.connect(str(backup_path))) as destination:
+            source.backup(destination)
+
+    with db.engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE member_applications "
+                "ADD COLUMN photo_filename VARCHAR(255)"
+            )
+        )
+
+    click.echo(f"Backup erstellt: {backup_path}")
+    click.echo("Fotospalte erfolgreich hinzugefügt.")
+
 @app.cli.command("create-admin")
 @click.option("--username", prompt="Benutzername")
 @click.password_option(
@@ -754,16 +1263,37 @@ def join():
             error = str(exc)
 
         else:
+            try:
+                photo_filename = save_member_photo(
+                    request.files.get("photo")
+                )
+            except ValueError as exc:
+                return render_template(
+                    "join.html",
+                    error=str(exc)
+                )
+
             application = MemberApplication(
                 **data,
                 birth_date=birth_date,
+                photo_filename=photo_filename,
                 publish_profile=(
                     request.form.get("publish_profile") == "yes"
                 )
             )
 
             db.session.add(application)
-            db.session.commit()
+
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+                if photo_filename:
+                    photo_path = member_photo_folder() / photo_filename
+                    photo_path.unlink(missing_ok=True)
+
+                raise
 
             flash(
                 "Vielen Dank! Dein Mitgliedsantrag wurde gespeichert "
@@ -772,7 +1302,7 @@ def join():
             )
 
             return redirect(url_for("join"))
-
+        
     return render_template("join.html", error=error)
 
 @app.route("/teamform", methods=["GET", "POST"])
@@ -835,17 +1365,38 @@ def teamform():
             error = str(exc)
 
         else:
+            try:
+                photo_filename = save_team_photo(
+                    request.files.get("photo")
+                )
+            except ValueError as exc:
+                return render_template(
+                    "teamform.html",
+                    error=str(exc)
+                )
+
             application = TeamApplication(
                 name=name,
                 game=game,
                 player_count=player_count,
                 captain_name=captain_name,
                 email=email,
-                notes=notes
+                notes=notes,
+                photo_filename=photo_filename
             )
 
             db.session.add(application)
-            db.session.commit()
+
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+                if photo_filename:
+                    photo_path = team_photo_folder() / photo_filename
+                    photo_path.unlink(missing_ok=True)
+
+                raise
 
             flash(
                 "Vielen Dank! Eure Teamanmeldung wurde gespeichert. "
@@ -904,6 +1455,27 @@ def admin_login():
 def admin_dashboard():
     return render_template("admin.html")
 
+@app.route(
+    "/admin/member-applications/<int:application_id>/photo"
+)
+@admin_required
+def admin_member_application_photo(application_id):
+    application = db.get_or_404(
+        MemberApplication,
+        application_id
+    )
+
+    if not application.photo_filename:
+        abort(404)
+
+    response = send_from_directory(
+        str(member_photo_folder()),
+        application.photo_filename
+    )
+
+    response.headers["Cache-Control"] = "private, no-store"
+
+    return response
 
 @app.route("/admin/logout", methods=["POST"])
 @admin_required

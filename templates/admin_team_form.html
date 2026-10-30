@@ -52,7 +52,7 @@
                 id="level"
                 name="level"
                 value="{{ request.form.get('level', team.level if team else '') }}"
-                placeholder="Zum Beispiel: Anfänger"
+                placeholder="img/teams/team_alpha.jpg"
                 maxlength="100"
                 required
             >
@@ -94,7 +94,8 @@
                 aria-describedby="image-help"
             >
             <p id="image-help">
-                Das Bild muss bereits im Ordner static/img liegen.
+                Das Bild muss bereits im Ordner static/img/teams liegen.
+                Beispiel: img/teams/team_alpha.jpg.
                 Erlaubt: JPG, JPEG, PNG und WEBP.
             </p>
         </div>

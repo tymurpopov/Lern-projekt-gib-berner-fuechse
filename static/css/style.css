@@ -131,3 +131,18 @@ img {
     align-items: center;
     margin-top: 16px;
 }
+
+.member-photo {
+    display: block;
+    width: 160px;
+    height: 160px;
+    max-width: 100%;
+    object-fit: cover;
+    border-radius: 12px;
+    margin: 16px 0;
+}
+
+.member-photo--large {
+    width: 240px;
+    height: 240px;
+}

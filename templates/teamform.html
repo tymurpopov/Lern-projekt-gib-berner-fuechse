@@ -27,7 +27,11 @@
     <p role="alert">{{ error }}</p>
     {% endif %}
 
-    <form method="post" action="{{ url_for('teamform') }}">
+    <form
+        method="post"
+        action="{{ url_for('teamform') }}"
+        enctype="multipart/form-data"
+    >
         <input
             type="hidden"
             name="csrf_token"
@@ -106,6 +110,24 @@
                 rows="5"
                 maxlength="5000"
             >{{ request.form.get('notes', '') }}</textarea>
+        </div>
+
+        <div>
+            <label for="photo">Teamfoto oder Logo (optional)</label>
+
+            <input
+                type="file"
+                id="photo"
+                name="photo"
+                accept="image/jpeg,image/png,image/webp"
+                aria-describedby="team-photo-help"
+            >
+
+            <p id="team-photo-help">
+                JPG, PNG oder WEBP. Höchstens 5 MB und 12 Megapixel.
+                Das Bild wird vor der Veröffentlichung geprüft.
+                Ladet nur Bilder hoch, die ihr verwenden und veröffentlichen dürft.
+            </p>
         </div>
 
         <div class="action-group">

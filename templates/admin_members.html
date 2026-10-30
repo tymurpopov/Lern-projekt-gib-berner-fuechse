@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block title %}Mitgliedsanträge{% endblock %}
+
 {% block content %}
 <section>
     <h1>Mitgliedsanträge</h1>
@@ -14,6 +16,40 @@
     <article>
         <h2>{{ application.nickname }}</h2>
 
+        {% if application.photo_filename %}
+        <img
+            src="{{ url_for(
+                'admin_member_application_photo',
+                application_id=application.id
+            ) }}"
+            alt="Eingereichtes Foto von {{ application.nickname }}"
+            style="max-width: 220px; height: auto; border-radius: 8px;"
+        >
+        {% endif %}
+
+        {% if application.status == 'approved'
+           and application.publish_profile
+           and application.photo_filename
+           and not public_member_photo(application) %}
+        <form
+            method="post"
+            action="{{ url_for(
+                'admin_member_photo_publish',
+                application_id=application.id
+            ) }}"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <button type="submit" class="action-button">
+                Foto veröffentlichen
+            </button>
+        </form>
+        {% endif %}
+
         <p>
             <strong>Name:</strong>
             {{ application.first_name }} {{ application.last_name }}
@@ -24,15 +60,39 @@
             {{ application.birth_date.strftime('%d.%m.%Y') }}
         </p>
 
-        <p><strong>E-Mail:</strong> {{ application.email }}</p>
-        <p><strong>Telefon:</strong> {{ application.phone or 'Nicht angegeben' }}</p>
-        <p><strong>Spiel:</strong> {{ application.game }}</p>
-        <p><strong>Rolle:</strong> {{ application.role or 'Nicht angegeben' }}</p>
-        <p><strong>Bemerkungen:</strong> {{ application.notes or 'Keine' }}</p>
+        <p>
+            <strong>E-Mail:</strong>
+            {{ application.email }}
+        </p>
+
+        <p>
+            <strong>Telefon:</strong>
+            {{ application.phone or 'Nicht angegeben' }}
+        </p>
+
+        <p>
+            <strong>Spiel:</strong>
+            {{ application.game }}
+        </p>
+
+        <p>
+            <strong>Rolle:</strong>
+            {{ application.role or 'Nicht angegeben' }}
+        </p>
 
         <p>
             <strong>Externer Profil-Link:</strong>
             {{ application.external_profile or 'Nicht angegeben' }}
+        </p>
+
+        <p>
+            <strong>Bemerkungen:</strong>
+            {{ application.notes or 'Keine Bemerkungen' }}
+        </p>
+
+        <p>
+            <strong>Eingegangen am:</strong>
+            {{ application.created_at.strftime('%d.%m.%Y %H:%M') }} UTC
         </p>
 
         <p>
@@ -42,6 +102,7 @@
 
         <p>
             <strong>Status:</strong>
+
             {% if application.status == 'pending' %}
                 Offen
             {% elif application.status == 'approved' %}
@@ -54,65 +115,64 @@
         </p>
 
         {% if application.status == 'pending' %}
-        <div class="action-group">
-            <form
-                method="post"
-                action="{{ url_for(
-                    'admin_member_application_approve',
-                    application_id=application.id
-                ) }}"
+        <form
+            method="post"
+            action="{{ url_for(
+                'admin_member_application_approve',
+                application_id=application.id
+            ) }}"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
             >
-                <input
-                    type="hidden"
-                    name="csrf_token"
-                    value="{{ csrf_token() }}"
-                >
-                <fieldset>
-                    <legend>Teams zuordnen (optional)</legend>
 
-                    {% for team in teams %}
-                    <div>
-                        <label>
-                            <input
-                                type="checkbox"
-                                name="team_ids"
-                                value="{{ team.id }}"
-                            >
-                            {{ team.name }} — {{ team.game }}
-                        </label>
-                    </div>
-                    {% else %}
-                    <p>Es sind noch keine Teams angelegt.</p>
-                    {% endfor %}
-                </fieldset>
+            <fieldset>
+                <legend>Teams zuordnen (optional)</legend>
 
-                <button type="submit" class="action-button">
-                    Annehmen
-                </button>
-            </form>
+                {% for team in teams %}
+                <div>
+                    <label>
+                        <input
+                            type="checkbox"
+                            name="team_ids"
+                            value="{{ team.id }}"
+                        >
+                        {{ team.name }} — {{ team.game }}
+                    </label>
+                </div>
+                {% else %}
+                <p>Es sind noch keine Teams angelegt.</p>
+                {% endfor %}
+            </fieldset>
 
-            <form
-                method="post"
-                action="{{ url_for(
-                    'admin_member_application_reject',
-                    application_id=application.id
-                ) }}"
-                onsubmit="return confirm('Diesen Antrag wirklich ablehnen?');"
+            <button type="submit" class="action-button">
+                Annehmen
+            </button>
+        </form>
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'admin_member_application_reject',
+                application_id=application.id
+            ) }}"
+            onsubmit="return confirm('Diesen Antrag wirklich ablehnen?');"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
             >
-                <input
-                    type="hidden"
-                    name="csrf_token"
-                    value="{{ csrf_token() }}"
-                >
 
-                <button
-                    type="submit"
-                    class="action-button action-button--secondary"
-                >
-                    Ablehnen
-                </button>
-            </form>
-        </div>
+            <button
+                type="submit"
+                class="action-button action-button--secondary"
+            >
+                Ablehnen
+            </button>
+        </form>
         {% endif %}
 
         {% set member = members_by_application.get(application.id) %}
@@ -162,13 +222,18 @@
         <p>
             <a
                 class="action-button"
-                href="{{ url_for('member_profile', member_id=member.id) }}"
+                href="{{ url_for(
+                    'member_profile',
+                    member_id=member.id
+                ) }}"
             >
                 Öffentliches Profil ansehen
             </a>
         </p>
         {% endif %}
     </article>
+
+    <hr>
     {% else %}
     <p>Es sind noch keine Mitgliedsanträge eingegangen.</p>
     {% endfor %}

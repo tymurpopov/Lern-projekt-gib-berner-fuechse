@@ -7,6 +7,12 @@
     <h1>Mitgliedschaft</h1>
 
     <p>
+        Du möchtest bei den Berner Füchsen mitmachen?
+        Sende uns einen Mitgliedsantrag.
+        Dein Antrag wird vom Verein geprüft.
+    </p>
+
+    <p>
         <a class="action-button" href="{{ url_for('join') }}">
             Mitglied werden
         </a>
@@ -20,6 +26,22 @@
     <article>
         <h3>{{ member.application.nickname }}</h3>
 
+        {% set photo = public_member_photo(member.application) %}
+
+        {% if photo %}
+        <img
+            class="member-photo"
+            src="{{ url_for(
+                'static',
+                filename='img/mitglieder/' ~ photo
+            ) }}"
+            alt="Foto von {{ member.application.nickname }}"
+            loading="lazy"
+            width="160"
+            height="160"
+        >
+        {% endif %}
+
         <p>
             <strong>Spiel:</strong>
             {{ member.application.game }}
@@ -32,7 +54,7 @@
         </p>
         {% endif %}
 
-        <p><strong>Teams:</strong></p>
+        <h4>Teams</h4>
 
         {% if member.teams %}
         <ul>
@@ -44,12 +66,17 @@
         <p>Noch keinem Team zugeteilt.</p>
         {% endif %}
 
-        <a
-            class="action-button"
-            href="{{ url_for('member_profile', member_id=member.id) }}"
-        >
-            Spielerprofil ansehen
-        </a>
+        <p>
+            <a
+                class="action-button"
+                href="{{ url_for(
+                    'member_profile',
+                    member_id=member.id
+                ) }}"
+            >
+                Spielerprofil ansehen
+            </a>
+        </p>
     </article>
     {% else %}
     <p>Zurzeit sind keine öffentlichen Spielerprofile verfügbar.</p>

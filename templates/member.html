@@ -6,7 +6,32 @@
 <article>
     <h1>{{ profile.nickname }}</h1>
 
-    <p><strong>Spiel:</strong> {{ profile.game }}</p>
+    {% set photo = public_member_photo(profile) %}
+
+    {% if photo %}
+    <img
+        class="member-photo member-photo--large"
+        src="{{ url_for(
+            'static',
+            filename='img/mitglieder/' ~ photo
+        ) }}"
+        alt="Foto von {{ profile.nickname }}"
+        width="240"
+        height="240"
+    >
+    {% endif %}
+
+    <p>
+        <strong>Spiel:</strong>
+        {{ profile.game }}
+    </p>
+
+    {% if profile.role %}
+    <p>
+        <strong>Rolle:</strong>
+        {{ profile.role }}
+    </p>
+    {% endif %}
 
     <h2>Teams</h2>
 
@@ -18,10 +43,6 @@
     </ul>
     {% else %}
     <p>Noch keinem Team zugeteilt.</p>
-    {% endif %}
-
-    {% if profile.role %}
-    <p><strong>Rolle:</strong> {{ profile.role }}</p>
     {% endif %}
 
     {% if profile.external_profile %}
@@ -37,13 +58,20 @@
     </p>
     {% endif %}
 
-    <p>
+    <div class="action-group">
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('membership') }}"
+        >
+            Zurück zu den Mitgliedern
+        </a>
+
         <a
             class="action-button action-button--secondary"
             href="{{ url_for('teams') }}"
         >
             Zu den Teams
         </a>
-    </p>
+    </div>
 </article>
 {% endblock %}

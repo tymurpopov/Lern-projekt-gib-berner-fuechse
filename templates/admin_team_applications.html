@@ -14,6 +14,39 @@
     <article>
         <h2>{{ application.name }}</h2>
 
+        {% if application.photo_filename %}
+        <img
+            src="{{ url_for(
+                'admin_team_application_photo',
+                application_id=application.id
+            ) }}"
+            alt="Eingereichtes Bild für {{ application.name }}"
+            style="max-width: 300px; max-height: 240px; object-fit: contain;"
+        >
+        {% endif %}
+
+        {% if application.status == 'approved'
+        and application.team_id
+        and application.photo_filename %}
+        <form
+            method="post"
+            action="{{ url_for(
+                'admin_team_photo_publish',
+                application_id=application.id
+            ) }}"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <button type="submit" class="action-button">
+                Teamfoto veröffentlichen
+            </button>
+        </form>
+        {% endif %}
+
         <p><strong>Spiel:</strong> {{ application.game }}</p>
         <p><strong>Spielerzahl:</strong> {{ application.player_count }}</p>
         <p><strong>Kontaktperson:</strong> {{ application.captain_name }}</p>
