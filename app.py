@@ -1,5 +1,5 @@
 from flask import Flask, render_template
-from models import db, Event, Team, Admin, TeamApplication
+from models import db, Event, Team, Admin, TeamApplication, MemberApplication, Member
 from werkzeug.security import generate_password_hash, check_password_hash
 import click
 from flask import (
@@ -18,6 +18,8 @@ import hmac
 from datetime import timedelta, date, time, timezone
 from functools import wraps
 import re
+from urllib.parse import urlsplit
+from sqlalchemy.exc import IntegrityError
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
@@ -183,6 +185,145 @@ def admin_teams():
         teams=all_teams
     )
 
+@app.route("/admin/member-applications")
+@admin_required
+def admin_member_applications():
+    statement = db.select(MemberApplication).order_by(
+        MemberApplication.created_at.desc(),
+        MemberApplication.id.desc()
+    )
+
+    applications = db.session.execute(statement).scalars().all()
+
+    members = db.session.execute(
+        db.select(Member)
+    ).scalars().all()
+
+    members_by_application = {
+        member.application_id: member
+        for member in members
+    }
+
+    return render_template(
+        "admin_members.html",
+        applications=applications,
+        members_by_application=members_by_application
+    )
+
+@app.route(
+    "/admin/member-applications/<int:application_id>/approve",
+    methods=["POST"]
+)
+@admin_required
+def admin_member_application_approve(application_id):
+    check_csrf()
+
+    application = db.get_or_404(
+        MemberApplication,
+        application_id
+    )
+
+    statement = (
+        db.update(MemberApplication)
+        .where(
+            MemberApplication.id == application_id,
+            MemberApplication.status == "pending"
+        )
+        .values(status="approved")
+    )
+
+    result = db.session.execute(statement)
+
+    if result.rowcount != 1:
+        db.session.rollback()
+
+        flash(
+            "Dieser Antrag wurde bereits bearbeitet.",
+            "member_application_admin"
+        )
+
+        return redirect(url_for("admin_member_applications"))
+
+    member = Member(
+        application_id=application.id,
+        nickname_key=application.nickname.strip().casefold()
+    )
+
+    db.session.add(member)
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+
+        flash(
+            "Der Antrag konnte nicht angenommen werden. "
+            "Möglicherweise ist dieser Nickname bereits vergeben. "
+            "Der Antrag bleibt offen.",
+            "member_application_admin"
+        )
+    else:
+        flash(
+            "Der Mitgliedsantrag wurde angenommen.",
+            "member_application_admin"
+        )
+
+    return redirect(url_for("admin_member_applications"))
+
+@app.route(
+    "/admin/member-applications/<int:application_id>/reject",
+    methods=["POST"]
+)
+@admin_required
+def admin_member_application_reject(application_id):
+    check_csrf()
+
+    db.get_or_404(MemberApplication, application_id)
+
+    statement = (
+        db.update(MemberApplication)
+        .where(
+            MemberApplication.id == application_id,
+            MemberApplication.status == "pending"
+        )
+        .values(status="rejected")
+    )
+
+    result = db.session.execute(statement)
+
+    if result.rowcount != 1:
+        db.session.rollback()
+
+        flash(
+            "Dieser Antrag wurde bereits bearbeitet.",
+            "member_application_admin"
+        )
+    else:
+        db.session.commit()
+
+        flash(
+            "Der Mitgliedsantrag wurde abgelehnt.",
+            "member_application_admin"
+        )
+
+    return redirect(url_for("admin_member_applications"))
+
+@app.route("/members/<int:member_id>")
+def member_profile(member_id):
+    member = db.get_or_404(Member, member_id)
+    application = member.application
+
+    if (
+        application is None
+        or application.status != "approved"
+        or not application.publish_profile
+    ):
+        abort(404)
+
+    return render_template(
+        "member.html",
+        profile=application
+    )
 
 @app.route("/admin/teams/new", methods=["GET", "POST"])
 @admin_required
@@ -424,9 +565,133 @@ def shop():
 def rules():
     return render_template("rules.html")
 
-@app.route("/join")
+@app.route("/join", methods=["GET", "POST"])
 def join():
-    return render_template("join.html")
+    error = None
+
+    if request.method == "POST":
+        check_csrf()
+
+        fields = (
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "nickname",
+            "game",
+            "role",
+            "external_profile",
+            "notes",
+        )
+
+        data = {
+            field: request.form.get(field, "").strip()
+            for field in fields
+        }
+
+        try:
+            required_fields = {
+                "first_name": ("Vorname", 100),
+                "last_name": ("Nachname", 100),
+                "nickname": ("Nickname", 80),
+                "game": ("Spiel", 100),
+            }
+
+            for field, (label, limit) in required_fields.items():
+                if not data[field] or len(data[field]) > limit:
+                    raise ValueError(
+                        f"{label}: Bitte 1 bis {limit} Zeichen eingeben."
+                    )
+
+            if (
+                len(data["email"]) > 254
+                or not re.fullmatch(
+                    r"[^@\s]+@[^@\s]+\.[^@\s]+",
+                    data["email"]
+                )
+            ):
+                raise ValueError(
+                    "Bitte eine gültige E-Mail-Adresse eingeben."
+                )
+
+            if len(data["phone"]) > 40:
+                raise ValueError("Die Telefonnummer ist zu lang.")
+
+            if len(data["role"]) > 100:
+                raise ValueError("Die Rollenbezeichnung ist zu lang.")
+
+            if len(data["notes"]) > 5000:
+                raise ValueError(
+                    "Die Bemerkungen dürfen höchstens 5000 Zeichen enthalten."
+                )
+
+            try:
+                birth_date = date.fromisoformat(
+                    request.form.get("birth_date", "")
+                )
+            except ValueError:
+                raise ValueError(
+                    "Bitte ein gültiges Geburtsdatum eingeben."
+                )
+
+            if birth_date > date.today():
+                raise ValueError(
+                    "Das Geburtsdatum darf nicht in der Zukunft liegen."
+                )
+
+            profile_url = data["external_profile"]
+
+            if profile_url:
+                if (
+                    len(profile_url) > 500
+                    or any(
+                        char.isspace() or ord(char) < 32
+                        for char in profile_url
+                    )
+                ):
+                    raise ValueError("Der Profil-Link ist ungültig.")
+
+                try:
+                    parsed = urlsplit(profile_url)
+
+                    valid_profile = (
+                        parsed.scheme == "https"
+                        and bool(parsed.hostname)
+                        and parsed.username is None
+                        and parsed.password is None
+                    )
+                except ValueError:
+                    valid_profile = False
+
+                if not valid_profile:
+                    raise ValueError(
+                        "Bitte einen vollständigen HTTPS-Profil-Link eingeben."
+                    )
+
+        except ValueError as exc:
+            error = str(exc)
+
+        else:
+            application = MemberApplication(
+                **data,
+                birth_date=birth_date,
+                publish_profile=(
+                    request.form.get("publish_profile") == "yes"
+                )
+            )
+
+            db.session.add(application)
+            db.session.commit()
+
+            flash(
+                "Vielen Dank! Dein Mitgliedsantrag wurde gespeichert "
+                "und wird geprüft.",
+                "member_application_success"
+            )
+
+            return redirect(url_for("join"))
+
+    return render_template("join.html", error=error)
 
 @app.route("/teamform", methods=["GET", "POST"])
 def teamform():
@@ -601,8 +866,7 @@ def admin_team_application_approve(application_id):
         )
         return redirect(url_for("admin_team_applications"))
 
-    # Только ожидающую заявку можно принять.
-    # Условное обновление защищает от повторного принятия.
+
     statement = (
         db.update(TeamApplication)
         .where(

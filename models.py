@@ -72,3 +72,68 @@ class TeamApplication(db.Model):
             name="check_application_player_count"
         ),
     )
+
+class MemberApplication(db.Model):
+    __tablename__ = "member_applications"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    first_name = db.Column(db.String(100), nullable=False)
+    last_name = db.Column(db.String(100), nullable=False)
+    birth_date = db.Column(db.Date, nullable=False)
+
+    email = db.Column(db.String(254), nullable=False)
+    phone = db.Column(db.String(40), nullable=False, default="")
+
+    nickname = db.Column(db.String(80), nullable=False)
+    game = db.Column(db.String(100), nullable=False)
+    role = db.Column(db.String(100), nullable=False, default="")
+
+    external_profile = db.Column(
+        db.String(500),
+        nullable=False,
+        default=""
+    )
+
+    notes = db.Column(db.Text, nullable=False, default="")
+
+    publish_profile = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False
+    )
+
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default="pending"
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+class Member(db.Model):
+    __tablename__ = "members"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    application_id = db.Column(
+        db.Integer,
+        db.ForeignKey("member_applications.id"),
+        unique=True,
+        nullable=False
+    )
+
+    nickname_key = db.Column(
+        db.String(255),
+        unique=True,
+        nullable=False
+    )
+
+    application = db.relationship(
+        "MemberApplication",
+        backref=db.backref("member", uselist=False)
+    )

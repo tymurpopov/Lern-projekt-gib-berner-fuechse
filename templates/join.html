@@ -1,9 +1,118 @@
 {% extends "base.html" %}
 
-{% block title %}
-join
-{% endblock %}
+{% block title %}Mitglied werden{% endblock %}
 
 {% block content %}
+<section>
+    <h1>Mitglied werden</h1>
 
+    <p>
+        Dein Antrag wird vom Verein geprüft.
+        Ein Spielerprofil wird nicht sofort veröffentlicht.
+    </p>
+
+    <p>
+        Dies ist ein Schulprojekt.
+        Bitte verwendet für Tests nur fiktive persönliche Daten.
+    </p>
+
+    {% for message in get_flashed_messages(
+        category_filter=['member_application_success']
+    ) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
+
+    {% if error %}
+    <p role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('join') }}">
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        {% set fields = [
+            ('first_name', 'Vorname', 'text', 100, true),
+            ('last_name', 'Nachname', 'text', 100, true),
+            ('email', 'E-Mail', 'email', 254, true),
+            ('phone', 'Telefon (optional)', 'tel', 40, false),
+            ('nickname', 'Nickname', 'text', 80, true),
+            ('game', 'Spiel', 'text', 100, true),
+            ('role', 'Rolle im Team (optional)', 'text', 100, false),
+            ('external_profile', 'Externer Profil-Link (optional, HTTPS)', 'url', 500, false)
+        ] %}
+
+        {% for name, label, type, limit, required in fields %}
+        <div>
+            <label for="{{ name }}">{{ label }}</label>
+
+            <input
+                type="{{ type }}"
+                id="{{ name }}"
+                name="{{ name }}"
+                value="{{ request.form.get(name, '') }}"
+                maxlength="{{ limit }}"
+                {% if required %}required{% endif %}
+            >
+        </div>
+        {% endfor %}
+
+        <div>
+            <label for="birth_date">Geburtsdatum</label>
+            <input
+                type="date"
+                id="birth_date"
+                name="birth_date"
+                value="{{ request.form.get('birth_date', '') }}"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="notes">Bemerkungen (optional)</label>
+            <textarea
+                id="notes"
+                name="notes"
+                rows="5"
+                maxlength="5000"
+            >{{ request.form.get('notes', '') }}</textarea>
+        </div>
+
+        <div>
+            <label>
+                <input
+                    type="checkbox"
+                    name="publish_profile"
+                    value="yes"
+                    {% if request.form.get('publish_profile') == 'yes' %}
+                    checked
+                    {% endif %}
+                >
+                Nach der Annahme dürfen mein Nickname, Spiel,
+                meine Rolle und mein angegebener Profil-Link
+                öffentlich angezeigt werden.
+            </label>
+        </div>
+
+        <p>
+            Vorname, Nachname, Geburtsdatum, E-Mail, Telefon
+            und Bemerkungen werden nicht im öffentlichen Profil angezeigt.
+        </p>
+
+        <div class="action-group">
+            <button type="submit" class="action-button">
+                Antrag senden
+            </button>
+
+            <a
+                class="action-button action-button--secondary"
+                href="{{ url_for('membership') }}"
+            >
+                Zurück
+            </a>
+        </div>
+    </form>
+</section>
 {% endblock %}

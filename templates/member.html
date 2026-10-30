@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}{{ profile.nickname }}{% endblock %}
+
+{% block content %}
+<article>
+    <h1>{{ profile.nickname }}</h1>
+
+    <p><strong>Spiel:</strong> {{ profile.game }}</p>
+
+    {% if profile.role %}
+    <p><strong>Rolle:</strong> {{ profile.role }}</p>
+    {% endif %}
+
+    {% if profile.external_profile %}
+    <p>
+        <a
+            class="action-button"
+            href="{{ profile.external_profile }}"
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+        >
+            Externes Spielerprofil öffnen
+        </a>
+    </p>
+    {% endif %}
+
+    <p>
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('teams') }}"
+        >
+            Zu den Teams
+        </a>
+    </p>
+</article>
+{% endblock %}
