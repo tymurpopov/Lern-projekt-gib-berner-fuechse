@@ -735,6 +735,276 @@ def admin_member_teams_save(member_id):
 
     return redirect(url_for("admin_member_applications"))
 
+def delete_member_photo_files(filename):
+    if not filename or not re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+        return
+
+    (public_member_photo_folder() / filename).unlink(missing_ok=True)
+    (member_photo_folder() / filename).unlink(missing_ok=True)
+
+
+def read_member_edit_form():
+    values = {
+        "nickname": request.form.get("nickname", "").strip(),
+        "game": request.form.get("game", "").strip(),
+        "role": request.form.get("role", "").strip(),
+        "external_profile": request.form.get("external_profile", "").strip(),
+    }
+
+    limits = {
+        "nickname": 80,
+        "game": 100,
+        "role": 100,
+        "external_profile": 500,
+    }
+
+    if not values["nickname"] or not values["game"]:
+        raise ValueError("Nickname und Spiel sind Pflichtfelder.")
+
+    for key, limit in limits.items():
+        if len(values[key]) > limit:
+            raise ValueError("Ein Feld ist zu lang.")
+
+    if values["external_profile"]:
+        parts = urlsplit(values["external_profile"])
+
+        if parts.scheme not in ("http", "https") or not parts.netloc:
+            raise ValueError("Der externe Profil-Link ist ungültig.")
+
+    values["publish_profile"] = request.form.get("publish_profile") == "1"
+
+    return values
+
+
+@app.route("/admin/members/<int:member_id>/edit", methods=["POST"])
+@admin_required
+def admin_member_edit_save(member_id):
+    check_csrf()
+
+    member = db.get_or_404(Member, member_id)
+    application = member.application
+
+    try:
+        values = read_member_edit_form()
+    except ValueError as exc:
+        flash(str(exc), "member_application_admin")
+
+        return redirect(url_for("admin_member_edit", member_id=member_id))
+
+    application.nickname = values["nickname"]
+    application.game = values["game"]
+    application.role = values["role"]
+    application.external_profile = values["external_profile"]
+    application.publish_profile = values["publish_profile"]
+    member.nickname_key = values["nickname"].casefold()
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+
+        flash(
+            "Dieser Nickname ist bereits vergeben.",
+            "member_application_admin"
+        )
+
+        return redirect(url_for("admin_member_edit", member_id=member_id))
+
+    if application.publish_profile:
+        try:
+            publish_member_photo(application)
+        except (OSError, ValueError):
+            app.logger.exception(
+                "Fotoveröffentlichung fehlgeschlagen: Mitglied %s",
+                member_id
+            )
+
+            flash(
+                "Das Mitglied wurde gespeichert, aber das Foto "
+                "konnte nicht veröffentlicht werden.",
+                "member_application_admin"
+            )
+
+            return redirect(url_for("admin_member_applications"))
+    else:
+        filename = application.photo_filename
+
+        if filename and re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+            (public_member_photo_folder() / filename).unlink(missing_ok=True)
+
+    flash(
+        "Das Mitglied wurde gespeichert.",
+        "member_application_admin"
+    )
+
+    return redirect(url_for("admin_member_applications"))
+
+
+@app.route("/admin/members/<int:member_id>/delete", methods=["POST"])
+@admin_required
+def admin_member_delete(member_id):
+    check_csrf()
+
+    member = db.get_or_404(Member, member_id)
+    application = member.application
+    filename = application.photo_filename
+
+    db.session.delete(member)
+    db.session.delete(application)
+    db.session.commit()
+
+    delete_member_photo_files(filename)
+
+    flash(
+        "Das Mitglied wurde gelöscht.",
+        "member_application_admin"
+    )
+
+    return redirect(url_for("admin_member_applications"))
+
+
+def delete_member_photo_files(filename):
+    if not filename or not re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+        return
+
+    (public_member_photo_folder() / filename).unlink(missing_ok=True)
+    (member_photo_folder() / filename).unlink(missing_ok=True)
+
+
+def unpublish_member_photo(filename):
+    if filename and re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+        (public_member_photo_folder() / filename).unlink(missing_ok=True)
+
+
+def member_form_from_request():
+    return {
+        "nickname": request.form.get("nickname", "").strip(),
+        "game": request.form.get("game", "").strip(),
+        "role": request.form.get("role", "").strip(),
+        "external_profile": request.form.get("external_profile", "").strip(),
+        "publish_profile": request.form.get("publish_profile") == "1",
+        "team_ids": request.form.getlist("team_ids"),
+    }
+
+
+def member_form_for(member):
+    application = member.application
+
+    return {
+        "nickname": application.nickname,
+        "game": application.game,
+        "role": application.role,
+        "external_profile": application.external_profile,
+        "publish_profile": application.publish_profile,
+        "team_ids": [str(team.id) for team in member.teams],
+    }
+
+
+def validate_member_form(form):
+    limits = {
+        "nickname": 80,
+        "game": 100,
+        "role": 100,
+        "external_profile": 500,
+    }
+
+    if not form["nickname"] or not form["game"]:
+        raise ValueError("Nickname und Spiel sind Pflichtfelder.")
+
+    for key, limit in limits.items():
+        if len(form[key]) > limit:
+            raise ValueError("Ein Feld ist zu lang.")
+
+    if form["external_profile"]:
+        parts = urlsplit(form["external_profile"])
+
+        if parts.scheme not in ("http", "https") or not parts.netloc:
+            raise ValueError("Der externe Profil-Link ist ungültig.")
+
+
+@app.route("/admin/members")
+@admin_required
+def admin_members():
+    statement = db.select(Member).order_by(Member.nickname_key)
+    all_members = db.session.execute(statement).scalars().all()
+
+    return render_template(
+        "admin_member_list.html",
+        members=all_members
+    )
+
+
+@app.route("/admin/members/<int:member_id>/edit", methods=["GET", "POST"])
+@admin_required
+def admin_member_edit(member_id):
+    selected_member = db.get_or_404(Member, member_id)
+    application = selected_member.application
+    error = None
+
+    if request.method == "POST":
+        check_csrf()
+        form = member_form_from_request()
+
+        try:
+            validate_member_form(form)
+            selected_teams = read_selected_teams()
+        except ValueError as exc:
+            error = str(exc)
+        else:
+            application.nickname = form["nickname"]
+            application.game = form["game"]
+            application.role = form["role"]
+            application.external_profile = form["external_profile"]
+            application.publish_profile = form["publish_profile"]
+            selected_member.nickname_key = form["nickname"].casefold()
+            selected_member.teams = selected_teams
+
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                error = "Dieser Nickname ist bereits vergeben."
+            else:
+                photo_failed = False
+
+                if application.publish_profile:
+                    try:
+                        publish_member_photo(application)
+                    except (OSError, ValueError):
+                        app.logger.exception(
+                            "Fotoveröffentlichung fehlgeschlagen: Mitglied %s",
+                            selected_member.id
+                        )
+                        photo_failed = True
+                else:
+                    unpublish_member_photo(application.photo_filename)
+
+                if photo_failed:
+                    flash(
+                        "Gespeichert, aber das Foto konnte nicht "
+                        "veröffentlicht werden.",
+                        "member_admin"
+                    )
+                else:
+                    flash("Das Mitglied wurde gespeichert.", "member_admin")
+
+                return redirect(url_for("admin_members"))
+    else:
+        form = member_form_for(selected_member)
+
+    teams = db.session.execute(
+        db.select(Team).order_by(Team.name)
+    ).scalars().all()
+
+    return render_template(
+        "admin_member_form.html",
+        member=selected_member,
+        form=form,
+        teams=teams,
+        error=error
+    )
+
+
 @app.route("/admin/teams")
 @admin_required
 def admin_teams():
@@ -749,7 +1019,9 @@ def admin_teams():
 @app.route("/admin/member-applications")
 @admin_required
 def admin_member_applications():
-    statement = db.select(MemberApplication).order_by(
+    statement = db.select(MemberApplication).where(
+        MemberApplication.status == "pending"
+    ).order_by(
         MemberApplication.created_at.desc(),
         MemberApplication.id.desc()
     )
@@ -1612,7 +1884,9 @@ def admin_logout():
 @app.route("/admin/team-applications")
 @admin_required
 def admin_team_applications():
-    statement = db.select(TeamApplication).order_by(
+    statement = db.select(TeamApplication).where(
+        TeamApplication.status == "pending"
+    ).order_by(
         TeamApplication.created_at.desc(),
         TeamApplication.id.desc()
     )

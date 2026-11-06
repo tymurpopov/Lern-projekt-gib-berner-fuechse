@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Mitglied bearbeiten{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Mitglied bearbeiten</h1>
+
+    {% if error %}
+    <p role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form
+        method="post"
+        action="{{ url_for('admin_member_edit', member_id=member.id) }}"
+    >
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <div>
+            <label for="nickname">Nickname</label>
+            <input
+                type="text"
+                id="nickname"
+                name="nickname"
+                value="{{ form.nickname }}"
+                maxlength="80"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="game">Spiel</label>
+            <input
+                type="text"
+                id="game"
+                name="game"
+                value="{{ form.game }}"
+                maxlength="100"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="role">Rolle</label>
+            <input
+                type="text"
+                id="role"
+                name="role"
+                value="{{ form.role }}"
+                maxlength="100"
+            >
+        </div>
+
+        <div>
+            <label for="external_profile">Externer Profil-Link</label>
+            <input
+                type="url"
+                id="external_profile"
+                name="external_profile"
+                value="{{ form.external_profile }}"
+                maxlength="500"
+            >
+        </div>
+
+        <fieldset>
+            <legend>Teams</legend>
+
+            {% for team in teams %}
+            <div>
+                <label>
+                    <input
+                        type="checkbox"
+                        name="team_ids"
+                        value="{{ team.id }}"
+                        {% if team.id|string in form.team_ids %}checked{% endif %}
+                    >
+                    {{ team.name }} — {{ team.game }}
+                </label>
+            </div>
+            {% else %}
+            <p>Es sind noch keine Teams angelegt.</p>
+            {% endfor %}
+        </fieldset>
+
+        <div>
+            <label>
+                <input
+                    type="checkbox"
+                    name="publish_profile"
+                    value="1"
+                    {% if form.publish_profile %}checked{% endif %}
+                >
+                Öffentliches Profil erlauben
+            </label>
+        </div>
+
+        <button type="submit">Speichern</button>
+
+        <a href="{{ url_for('admin_members') }}">Abbrechen</a>
+    </form>
+</section>
+{% endblock %}

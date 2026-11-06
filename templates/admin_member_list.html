@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Mitglieder verwalten{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Mitglieder verwalten</h1>
+
+    {% for message in get_flashed_messages(
+        category_filter=['member_admin']
+    ) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
+
+    {% for member in members %}
+    {% set application = member.application %}
+    {% set photo = public_member_photo(application) %}
+    <article>
+        {% if photo %}
+        <img
+            class="identity-icon identity-icon--member"
+            src="{{ url_for('static', filename='img/mitglieder/' ~ photo) }}"
+            alt="Profilbild von {{ application.nickname }}"
+            loading="lazy"
+            width="48"
+            height="48"
+        >
+        {% endif %}
+
+        <h2>{{ application.nickname }}</h2>
+
+        <p><strong>Spiel:</strong> {{ application.game }}</p>
+        <p><strong>Rolle:</strong> {{ application.role or 'Nicht angegeben' }}</p>
+        <p>
+            <strong>Teams:</strong>
+            {% for team in member.teams %}{{ team.name }}{% if not loop.last %}, {% endif %}{% else %}Keine{% endfor %}
+        </p>
+        <p>
+            <strong>Öffentliches Profil:</strong>
+            {{ 'Ja' if application.publish_profile else 'Nein' }}
+        </p>
+
+        <p>
+            <a href="{{ url_for('admin_member_edit', member_id=member.id) }}">
+                Bearbeiten
+            </a>
+        </p>
+
+        <form
+            method="post"
+            action="{{ url_for('admin_member_delete', member_id=member.id) }}"
+            onsubmit="return confirm('Dieses Mitglied wirklich löschen? Das Foto wird ebenfalls entfernt.');"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <button type="submit">Löschen</button>
+        </form>
+    </article>
+    {% else %}
+    <p>Es sind noch keine Mitglieder eingetragen.</p>
+    {% endfor %}
+
+    <p>
+        <a href="{{ url_for('admin_member_applications') }}">
+            Mitgliedsanträge prüfen
+        </a>
+    </p>
+
+    <p>
+        <a href="{{ url_for('admin_dashboard') }}">
+            Zurück zum Admin-Bereich
+        </a>
+    </p>
+</section>
+{% endblock %}
