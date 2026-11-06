@@ -85,13 +85,11 @@
         <div>
             <label for="image">Bildpfad (optional)</label>
             <input
-                type="text"
-                id="image"
-                name="image"
-                value="{{ request.form.get('image', (team.image or '') if team else '') }}"
-                placeholder="img/team_alpha.jpg"
-                maxlength="255"
-                aria-describedby="image-help"
+                type="file"
+                id="photo"
+                name="photo"
+                accept="image/jpeg,image/png,image/webp"
+                aria-describedby="team-photo-help"
             >
             <p id="image-help">
                 Das Bild muss bereits im Ordner static/img/teams liegen.

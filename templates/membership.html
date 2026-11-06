@@ -24,23 +24,25 @@
 
     {% for member in members %}
     <article>
-        <h3>{{ member.application.nickname }}</h3>
-
         {% set photo = public_member_photo(member.application) %}
 
-        {% if photo %}
-        <img
-            class="member-photo"
-            src="{{ url_for(
-                'static',
-                filename='img/mitglieder/' ~ photo
-            ) }}"
-            alt="Foto von {{ member.application.nickname }}"
-            loading="lazy"
-            width="160"
-            height="160"
-        >
-        {% endif %}
+        <div class="identity-heading">
+            {% if photo %}
+            <img
+                class="identity-icon identity-icon--member"
+                src="{{ url_for(
+                    'static',
+                    filename='img/mitglieder/' ~ photo
+                ) }}"
+                alt="Foto von {{ member.application.nickname }}"
+                loading="lazy"
+                width="48"
+                height="48"
+            >
+            {% endif %}
+
+            <h3>{{ member.application.nickname }}</h3>
+        </div>
 
         <p>
             <strong>Spiel:</strong>
@@ -59,7 +61,18 @@
         {% if member.teams %}
         <ul>
             {% for team in member.teams %}
-            <li>{{ team.name }} — {{ team.game }}</li>
+            <li class="team-line">
+                {% if team.image %}
+                <img
+                    class="inline-team-icon"
+                    src="{{ url_for('static', filename=team.image) }}"
+                    alt="Logo von {{ team.name }}"
+                >
+                {% endif %}
+
+                {{ team.name }}
+                — {{ team.game }}
+            </li>
             {% endfor %}
         </ul>
         {% else %}

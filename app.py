@@ -218,10 +218,6 @@ def publish_member_photo(application):
 
     return True
 
-@app.route(
-    "/admin/team-applications/<int:application_id>/photo"
-)
-
 def admin_required(view):
     @wraps(view)
     def wrapped_view(*args, **kwargs):
@@ -239,6 +235,10 @@ def admin_required(view):
         return view(*args, **kwargs)
 
     return wrapped_view
+
+@app.route(
+    "/admin/team-applications/<int:application_id>/photo"
+)
 
 @admin_required
 def admin_team_application_photo(application_id):
@@ -364,6 +364,106 @@ def member_photo_helpers():
     return {
         "public_member_photo": public_member_photo
     }
+
+def event_photo_folder():
+    return Path(app.static_folder) / "img" / "events"
+
+
+def save_event_photo(upload):
+    if upload is None or not upload.filename:
+        return None
+
+    max_size = 5 * 1024 * 1024
+    content = upload.stream.read(max_size + 1)
+
+    if not content:
+        raise ValueError("Die ausgewählte Bilddatei ist leer.")
+
+    if len(content) > max_size:
+        raise ValueError("Das Eventbild darf höchstens 5 MB groß sein.")
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "error",
+                Image.DecompressionBombWarning
+            )
+
+            with Image.open(BytesIO(content)) as original:
+                if original.format not in {"JPEG", "PNG", "WEBP"}:
+                    raise ValueError(
+                        "Bitte ein JPG-, PNG- oder WEBP-Bild auswählen."
+                    )
+
+                if original.width * original.height > 12_000_000:
+                    raise ValueError(
+                        "Das Bild darf höchstens 12 Megapixel haben."
+                    )
+
+                original.load()
+
+                photo = ImageOps.exif_transpose(original).convert("RGB")
+
+    except (
+        UnidentifiedImageError,
+        OSError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning
+    ):
+        raise ValueError(
+            "Die Datei konnte nicht als gültiges Bild gelesen werden."
+        )
+
+    photo.thumbnail((1200, 1200))
+    photo.info.clear()
+
+    folder = event_photo_folder()
+    folder.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{secrets.token_hex(16)}.jpg"
+    photo.save(folder / filename, format="JPEG", quality=88)
+
+    return f"img/events/{filename}"
+
+
+@app.cli.command("add-event-image")
+def add_event_image():
+    inspector = inspect(db.engine)
+
+    if not inspector.has_table("events"):
+        raise click.ClickException(
+            "Die Tabelle events fehlt. Führe zuerst init-db aus."
+        )
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("events")
+    }
+
+    if "image" in columns:
+        click.echo("Das Eventbild-Feld ist bereits vorhanden.")
+        return
+
+    database_path = Path(db.engine.url.database)
+
+    backup_folder = Path(app.instance_path) / "backups"
+    backup_folder.mkdir(parents=True, exist_ok=True)
+
+    backup_path = backup_folder / (
+        f"before_event_image_{secrets.token_hex(8)}.db"
+    )
+
+    with closing(sqlite3.connect(str(database_path))) as source:
+        with closing(sqlite3.connect(str(backup_path))) as destination:
+            source.backup(destination)
+
+    with db.engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE events ADD COLUMN image VARCHAR(255)")
+        )
+
+    click.echo(f"Backup erstellt: {backup_path}")
+    click.echo("Eventbild-Feld erfolgreich hinzugefügt.")
 
 def read_event_form():
     title = request.form.get("title", "").strip()
@@ -521,9 +621,10 @@ def read_team_form():
             flags=re.IGNORECASE
         )
 
-        raise ValueError(
-        "Bildpfad ungültig. Beispiel: img/teams/team_alpha.jpg"
-        )
+        if len(image) > 255 or not valid_image:
+            raise ValueError(
+                "Bildpfad ungültig. Beispiel: img/teams/team_alpha.jpg"
+            )
 
     return {
         "name": name,
@@ -957,10 +1058,11 @@ def admin_event_create():
 
         try:
             data = read_event_form()
+            photo_path = save_event_photo(request.files.get("photo"))
         except ValueError as exc:
             error = str(exc)
         else:
-            new_event = Event(**data)
+            new_event = Event(**data, image=photo_path)
 
             db.session.add(new_event)
             db.session.commit()
@@ -988,6 +1090,7 @@ def admin_event_edit(event_id):
 
         try:
             data = read_event_form()
+            photo_path = save_event_photo(request.files.get("photo"))
         except ValueError as exc:
             error = str(exc)
         else:
@@ -998,6 +1101,9 @@ def admin_event_edit(event_id):
             selected_event.game = data["game"]
             selected_event.description = data["description"]
 
+            if photo_path:
+                selected_event.image = photo_path
+
             db.session.commit()
 
             return redirect(url_for("admin_events"))
@@ -1007,7 +1113,6 @@ def admin_event_edit(event_id):
         event=selected_event,
         error=error
     )
-
 
 @app.route(
     "/admin/events/<int:event_id>/delete",
@@ -1117,6 +1222,29 @@ def teams():
     all_teams = db.session.execute(statement).scalars().all()
 
     return render_template("teams.html", teams=all_teams)
+
+@app.route("/teams/<int:team_id>")
+def team_profile(team_id):
+    team = db.get_or_404(Team, team_id)
+
+    statement = (
+        db.select(Member)
+        .join(MemberApplication)
+        .where(
+            Member.teams.any(Team.id == team.id),
+            MemberApplication.status == "approved",
+            MemberApplication.publish_profile.is_(True)
+        )
+        .order_by(Member.nickname_key)
+    )
+
+    public_members = db.session.execute(statement).scalars().all()
+
+    return render_template(
+        "team.html",
+        team=team,
+        members=public_members
+    )
 
 @app.route("/events")
 def events():
@@ -1247,12 +1375,8 @@ def join():
                         and parsed.username is None
                         and parsed.password is None
                     )
-                except ValueError as exc:
-                    error = str(exc)
-                    app.logger.warning(
-                        "Mitgliedsantrag nicht gespeichert: %s",
-                        error
-                    )
+                except ValueError:
+                    valid_profile = False
 
                 if not valid_profile:
                     raise ValueError(
@@ -1551,12 +1675,30 @@ def admin_team_application_approve(application_id):
     )
 
     db.session.add(new_team)
+    db.session.flush()
+
+    application.team_id = new_team.id
+
     db.session.commit()
 
-    flash(
-        "Der Antrag wurde angenommen. Das Team ist jetzt veröffentlicht.",
-        "team_application_admin"
-    )
+    try:
+        publish_team_photo(application)
+    except (OSError, ValueError, SQLAlchemyError):
+        app.logger.exception(
+            "Teamfotoveröffentlichung fehlgeschlagen: Antrag %s",
+            application.id
+        )
+
+        flash(
+            "Das Team wurde angenommen, aber das Bild konnte "
+            "noch nicht veröffentlicht werden.",
+            "team_application_admin"
+        )
+    else:
+        flash(
+            "Der Antrag wurde angenommen. Das Team ist jetzt veröffentlicht.",
+            "team_application_admin"
+        )
 
     return redirect(url_for("admin_team_applications"))
 

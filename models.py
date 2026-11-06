@@ -32,6 +32,7 @@ class Event(db.Model):
     location = db.Column(db.String(200), nullable=False)
     game = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False, default="")
+    image = db.Column(db.String(255), nullable=True)
 
 
 class Team(db.Model):

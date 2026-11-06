@@ -9,11 +9,21 @@
 
     {% for event in events %}
     <article>
+
         <h2>
             <a href="{{ url_for('event', event_id=event.id) }}">
                 {{ event.title }}
             </a>
         </h2>
+
+        {% if event.image %}
+        <img
+            class="event-icon"
+            src="{{ url_for('static', filename=event.image) }}"
+            alt="Bild von {{ event.title }}"
+            loading="lazy"
+        >
+        {% endif %}
 
         <p>
             <strong>Datum:</strong>

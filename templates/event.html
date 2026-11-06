@@ -4,6 +4,14 @@
 
 {% block content %}
 <article>
+    {% if event.image %}
+    <img
+        class="event-photo"
+        src="{{ url_for('static', filename=event.image) }}"
+        alt="Bild von {{ event.title }}"
+    >
+    {% endif %}
+
     <h1>{{ event.title }}</h1>
 
     <p>
@@ -23,10 +31,10 @@
     <p>{{ event.description or 'Weitere Informationen folgen.' }}</p>
 
     <a
-            class="action-button action-button--secondary"
-            href="{{ url_for('events') }}"
-        >
-            Zurück zu den Events
-        </a>
+        class="action-button action-button--secondary"
+        href="{{ url_for('events') }}"
+    >
+        Zurück zu den Events
+    </a>
 </article>
 {% endblock %}

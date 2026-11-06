@@ -12,6 +12,7 @@
 
     <form
         method="post"
+        enctype="multipart/form-data"
         action="{{ url_for('admin_event_edit', event_id=event.id)
                     if event else url_for('admin_event_create') }}"
     >
@@ -87,6 +88,27 @@
                 rows="6"
                 maxlength="10000"
             >{{ request.form.get('description', event.description if event else '') }}</textarea>
+        </div>
+
+        <div>
+            <label for="photo">Eventbild (optional, JPG, PNG oder WEBP, max. 5 MB)</label>
+
+            {% if event and event.image %}
+            <p>Aktuelles Bild:</p>
+            <img
+                class="event-photo"
+                src="{{ url_for('static', filename=event.image) }}"
+                alt="Bild von {{ event.title }}"
+            >
+            <p>Ein neues Bild ersetzt das aktuelle.</p>
+            {% endif %}
+
+            <input
+                type="file"
+                id="photo"
+                name="photo"
+                accept="image/jpeg,image/png,image/webp"
+            >
         </div>
 
         <button type="submit">Speichern</button>
