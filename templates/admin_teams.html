@@ -12,6 +12,17 @@
 
     {% for team in teams %}
     <article>
+        {% if team.image %}
+            <img
+                class="identity-icon identity-icon--team"
+                src="{{ url_for('static', filename=team.image) }}"
+                alt="Logo von {{ team.name }}"
+                loading="lazy"
+                width="48"
+                height="48"
+            >
+            {% endif %}
+
         <h2>{{ team.name }}</h2>
 
         <p><strong>Spiel:</strong> {{ team.game }}</p>

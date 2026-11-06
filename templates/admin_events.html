@@ -12,6 +12,15 @@
 
     {% for event in events %}
     <article>
+        {% if event.image %}
+        <img
+            class="event-icon"
+            src="{{ url_for('static', filename=event.image) }}"
+            alt="Bild von {{ event.title }}"
+            loading="lazy"
+        >
+        {% endif %}
+
         <h2>{{ event.title }}</h2>
 
         <p>
