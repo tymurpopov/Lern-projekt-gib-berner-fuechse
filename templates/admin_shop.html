@@ -53,6 +53,37 @@
         {% if product.description %}
         <p>{{ product.description }}</p>
         {% endif %}
+
+        <div class="action-group">
+            <a
+                class="action-button action-button--secondary"
+                href="{{ url_for(
+                    'admin_product_edit',
+                    product_id=product.id
+                ) }}"
+            >
+                Bearbeiten
+            </a>
+
+            <form
+                method="post"
+                action="{{ url_for(
+                    'admin_product_delete',
+                    product_id=product.id
+                ) }}"
+                onsubmit="return confirm('Dieses Produkt wirklich löschen?');"
+            >
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+                <button class="action-button" type="submit">
+                    Löschen
+                </button>
+            </form>
+        </div>
     </article>
     {% else %}
     <p>Es sind noch keine Produkte eingetragen.</p>

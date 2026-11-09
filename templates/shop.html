@@ -1,9 +1,70 @@
 {% extends "base.html" %}
 
-{% block title %}
-shop
-{% endblock %}
+{% block title %}Shop{% endblock %}
 
 {% block content %}
-<h1>Shop</h1>
+<section>
+    <h1>Vereinsshop</h1>
+
+    <p>Merchandise der Berner Füchse.</p>
+
+    <p>
+        Dies ist ein Schulprojekt.
+        Es werden keine echten Zahlungen durchgeführt.
+    </p>
+
+    <div class="shop-grid">
+        {% for product in products %}
+        <article class="product-card">
+            {% if product.image %}
+            <img
+                class="product-photo"
+                src="{{ url_for('static', filename=product.image) }}"
+                alt="Produktbild: {{ product.name }}"
+                loading="lazy"
+                width="180"
+                height="180"
+            >
+            {% endif %}
+
+            <h2>{{ product.name }}</h2>
+
+            {% if product.description %}
+            <p>{{ product.description }}</p>
+            {% endif %}
+
+            <p class="product-price">
+                CHF {{ "%.2f"|format(product.price_cents / 100) }}
+            </p>
+
+            {% if product.sizes %}
+            <p>
+                <strong>Grössen:</strong>
+                {{ product.sizes }}
+            </p>
+            {% endif %}
+
+            <p>
+                Auf Lager: {{ product.quantity }} Stück
+            </p>
+
+            <p>
+                <a
+                    class="action-button action-button--secondary"
+                    href="{{ url_for(
+                        'product_detail',
+                        product_id=product.id
+                    ) }}"
+                >
+                    Details ansehen
+                </a>
+            </p>
+
+            {% include "_cart_add_form.html" %}
+        </article>
+        {% else %}
+        <p>Zurzeit sind keine Produkte verfügbar.</p>
+        {% endfor %}
+    </div>
+</section>
 {% endblock %}

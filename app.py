@@ -1572,8 +1572,133 @@ def admin_product_create():
 
     return render_template(
         "admin_product_form.html",
+        product=None,
         error=error
     )
+
+def remove_shop_photo(image_path):
+    if not image_path or not re.fullmatch(
+        r"img/shop/[a-f0-9]{32}\.png",
+        image_path
+    ):
+        return
+
+    try:
+        referenced = db.session.execute(
+            db.select(Product.id)
+            .where(Product.image == image_path)
+            .limit(1)
+        ).first()
+
+        if referenced is None:
+            (Path(app.static_folder) / image_path).unlink(
+                missing_ok=True
+            )
+
+    except (OSError, SQLAlchemyError):
+        app.logger.exception(
+            "Produktbild konnte nicht entfernt werden."
+        )
+
+
+@app.route(
+    "/admin/shop/<int:product_id>/edit",
+    methods=["GET", "POST"]
+)
+@admin_required
+def admin_product_edit(product_id):
+    product = db.get_or_404(Product, product_id)
+    error = None
+    photo_path = None
+    old_image = product.image
+
+    if request.method == "POST":
+        check_csrf()
+
+        try:
+            values = read_product_form()
+            photo_path = save_shop_photo(request.files.get("photo"))
+
+            for field, value in values.items():
+                setattr(product, field, value)
+
+            if photo_path:
+                product.image = photo_path
+
+            db.session.commit()
+
+        except ValueError as exc:
+            db.session.rollback()
+            error = str(exc)
+
+        except (OSError, SQLAlchemyError):
+            db.session.rollback()
+
+            app.logger.exception(
+                "Produkt konnte nicht aktualisiert werden."
+            )
+
+            remove_shop_photo(photo_path)
+
+            error = (
+                "Das Produkt konnte nicht gespeichert werden. "
+                "Bitte erneut versuchen."
+            )
+
+        else:
+            if photo_path:
+                remove_shop_photo(old_image)
+
+            flash(
+                "Das Produkt wurde aktualisiert.",
+                "shop_admin"
+            )
+
+            return redirect(url_for("admin_shop"))
+
+    return render_template(
+        "admin_product_form.html",
+        product=product,
+        error=error
+    )
+
+
+@app.route(
+    "/admin/shop/<int:product_id>/delete",
+    methods=["POST"]
+)
+@admin_required
+def admin_product_delete(product_id):
+    check_csrf()
+
+    product = db.get_or_404(Product, product_id)
+    image_path = product.image
+
+    try:
+        db.session.delete(product)
+        db.session.commit()
+
+    except SQLAlchemyError:
+        db.session.rollback()
+
+        app.logger.exception(
+            "Produkt konnte nicht gelöscht werden."
+        )
+
+        flash(
+            "Das Produkt konnte nicht gelöscht werden.",
+            "shop_admin"
+        )
+
+    else:
+        remove_shop_photo(image_path)
+
+        flash(
+            "Das Produkt wurde gelöscht.",
+            "shop_admin"
+        )
+
+    return redirect(url_for("admin_shop"))
 
 @app.cli.command("init-db")
 def init_db():
@@ -1720,7 +1845,241 @@ def membership():
 
 @app.route("/shop")
 def shop():
-    return render_template("shop.html")
+    products = db.session.execute(
+        db.select(Product)
+        .where(Product.active.is_(True))
+        .order_by(Product.name)
+    ).scalars().all()
+
+    return render_template(
+        "shop.html",
+        products=products
+    )
+
+def read_cart():
+    raw = session.get("cart", {})
+
+    if not isinstance(raw, dict):
+        return {}
+
+    cart = {}
+
+    for key, quantity in list(raw.items())[:50]:
+        if (
+            isinstance(key, str)
+            and re.fullmatch(r"[1-9][0-9]{0,11}", key)
+            and type(quantity) is int
+            and 1 <= quantity <= 10000
+        ):
+            cart[key] = quantity
+
+    return cart
+
+
+def read_cart_quantity(allow_zero=False):
+    value = request.form.get("quantity", "").strip()
+    minimum = 0 if allow_zero else 1
+
+    if not re.fullmatch(r"[0-9]{1,5}", value):
+        raise ValueError(
+            "Bitte eine gültige ganze Anzahl eingeben."
+        )
+
+    quantity = int(value)
+
+    if not minimum <= quantity <= 10000:
+        raise ValueError(
+            f"Bitte eine Anzahl von {minimum} bis 10000 eingeben."
+        )
+
+    return quantity
+
+
+@app.context_processor
+def cart_helpers():
+    return {
+        "cart_count": sum(read_cart().values())
+    }
+
+
+@app.route("/shop/<int:product_id>")
+def product_detail(product_id):
+    product = db.get_or_404(Product, product_id)
+
+    if not product.active:
+        abort(404)
+
+    return render_template(
+        "product.html",
+        product=product
+    )
+
+
+@app.route(
+    "/cart/add/<int:product_id>",
+    methods=["POST"]
+)
+def cart_add(product_id):
+    check_csrf()
+
+    product = db.get_or_404(Product, product_id)
+
+    if not product.active:
+        abort(404)
+
+    cart = read_cart()
+    key = str(product.id)
+
+    try:
+        quantity = read_cart_quantity()
+
+        if key not in cart and len(cart) >= 50:
+            raise ValueError(
+                "Die maximale Anzahl verschiedener Produkte ist erreicht."
+            )
+
+        new_quantity = cart.get(key, 0) + quantity
+
+        if (
+            new_quantity > product.quantity
+            or new_quantity > 10000
+        ):
+            raise ValueError(
+                "Diese Anzahl ist nicht verfügbar."
+            )
+
+    except ValueError as exc:
+        flash(str(exc), "cart_message")
+
+        return redirect(
+            url_for("product_detail", product_id=product.id)
+        )
+
+    cart[key] = new_quantity
+    session["cart"] = cart
+
+    flash(
+        "Das Produkt wurde zum Warenkorb hinzugefügt.",
+        "cart_message"
+    )
+
+    return redirect(url_for("cart_view"))
+
+
+@app.route("/cart")
+def cart_view():
+    cart = read_cart()
+    products = []
+
+    if cart:
+        products = db.session.execute(
+            db.select(Product)
+            .where(
+                Product.id.in_([int(key) for key in cart]),
+                Product.active.is_(True)
+            )
+            .order_by(Product.name)
+        ).scalars().all()
+
+    items = []
+    kept = {}
+    total_cents = 0
+
+    for product in products:
+        quantity = cart[str(product.id)]
+        subtotal = product.price_cents * quantity
+
+        kept[str(product.id)] = quantity
+
+        items.append({
+            "product": product,
+            "quantity": quantity,
+            "subtotal_cents": subtotal,
+            "available": quantity <= product.quantity,
+        })
+
+        total_cents += subtotal
+
+    if kept != cart:
+        session["cart"] = kept
+
+        flash(
+            "Nicht mehr verfügbare Produkte wurden "
+            "aus dem Warenkorb entfernt.",
+            "cart_message"
+        )
+
+    return render_template(
+        "cart.html",
+        items=items,
+        total_cents=total_cents
+    )
+
+
+@app.route(
+    "/cart/update/<int:product_id>",
+    methods=["POST"]
+)
+def cart_update(product_id):
+    check_csrf()
+
+    cart = read_cart()
+    key = str(product_id)
+
+    if key not in cart:
+        return redirect(url_for("cart_view"))
+
+    try:
+        quantity = read_cart_quantity(allow_zero=True)
+
+        if quantity == 0:
+            cart.pop(key, None)
+
+        else:
+            product = db.get_or_404(Product, product_id)
+
+            if not product.active:
+                abort(404)
+
+            if quantity > product.quantity:
+                raise ValueError(
+                    "Für diese Anzahl reicht der Lagerbestand nicht aus."
+                )
+
+            cart[key] = quantity
+
+    except ValueError as exc:
+        flash(str(exc), "cart_message")
+
+    else:
+        session["cart"] = cart
+
+        flash(
+            "Der Warenkorb wurde aktualisiert.",
+            "cart_message"
+        )
+
+    return redirect(url_for("cart_view"))
+
+
+@app.route(
+    "/cart/remove/<int:product_id>",
+    methods=["POST"]
+)
+def cart_remove(product_id):
+    check_csrf()
+
+    cart = read_cart()
+    cart.pop(str(product_id), None)
+
+    session["cart"] = cart
+
+    flash(
+        "Das Produkt wurde aus dem Warenkorb entfernt.",
+        "cart_message"
+    )
+
+    return redirect(url_for("cart_view"))
 
 @app.route("/rules")
 def rules():

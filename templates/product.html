@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }}{% endblock %}
+
+{% block content %}
+<article>
+    {% for message in get_flashed_messages(
+        category_filter=['cart_message']
+    ) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
+
+    <h1>{{ product.name }}</h1>
+
+    {% if product.image %}
+    <img
+        class="product-detail-photo"
+        src="{{ url_for('static', filename=product.image) }}"
+        alt="Produktbild: {{ product.name }}"
+    >
+    {% endif %}
+
+    <p class="product-price">
+        CHF {{ "%.2f"|format(product.price_cents / 100) }}
+    </p>
+
+    {% if product.description %}
+    <h2>Beschreibung</h2>
+    <p class="product-description">{{ product.description }}</p>
+    {% endif %}
+
+    {% if product.sizes %}
+    <p>
+        <strong>Grössen:</strong>
+        {{ product.sizes }}
+    </p>
+    {% endif %}
+
+    <p>
+        <strong>Auf Lager:</strong>
+        {{ product.quantity }} Stück
+    </p>
+
+    {% include "_cart_add_form.html" %}
+
+    <p>
+        Schulprojekt: Es werden keine echten Zahlungen durchgeführt.
+    </p>
+
+    <div class="action-group">
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('shop') }}"
+        >
+            Zurück zum Shop
+        </a>
+
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('cart_view') }}"
+        >
+            Warenkorb ansehen
+        </a>
+    </div>
+</article>
+{% endblock %}

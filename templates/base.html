@@ -12,9 +12,31 @@
             <a href="/teams">Teams</a>
             <a href="/events">Events</a>
             <a href="/membership">Membership</a>
-            <a href="/shop">Shop</a>
             <a href="/rules">Rules</a>
+            <a href="/shop">Shop</a>
         </nav>
+        <a
+            class="cart-link"
+            href="{{ url_for('cart_view') }}"
+            aria-label="Warenkorb, {{ cart_count }} Artikel"
+            title="Warenkorb"
+        >
+            <svg
+                width="26"
+                height="26"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+            >
+                <path d="M3 3h2l2.4 12h11.2l2-8H6"/>
+                <circle cx="9" cy="20" r="1"/>
+                <circle cx="18" cy="20" r="1"/>
+            </svg>
+
+            <span class="cart-badge">{{ cart_count }}</span>
+        </a>
         <button class="menu-toggle">
             ☰
         </button>

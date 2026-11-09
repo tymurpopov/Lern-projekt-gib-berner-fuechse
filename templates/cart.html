@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Warenkorb{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Warenkorb</h1>
+
+    {% for message in get_flashed_messages(
+        category_filter=['cart_message']
+    ) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
+
+    {% for item in items %}
+    {% set product = item.product %}
+
+    <article class="product-card cart-item">
+        {% if product.image %}
+        <img
+            class="product-photo"
+            src="{{ url_for('static', filename=product.image) }}"
+            alt="Produktbild: {{ product.name }}"
+            loading="lazy"
+            width="180"
+            height="180"
+        >
+        {% endif %}
+
+        <h2>
+            <a href="{{ url_for(
+                'product_detail',
+                product_id=product.id
+            ) }}">
+                {{ product.name }}
+            </a>
+        </h2>
+
+        <p>
+            Einzelpreis:
+            CHF {{ "%.2f"|format(product.price_cents / 100) }}
+        </p>
+
+        <p>
+            Zwischensumme:
+            <strong>
+                CHF {{ "%.2f"|format(item.subtotal_cents / 100) }}
+            </strong>
+        </p>
+
+        {% if not item.available %}
+        <p role="alert">
+            Der Lagerbestand hat sich geändert.
+            Verfügbar: {{ product.quantity }} Stück.
+            Bitte die Anzahl reduzieren oder das Produkt entfernen.
+        </p>
+        {% endif %}
+
+        <form
+            class="cart-quantity-form"
+            method="post"
+            action="{{ url_for(
+                'cart_update',
+                product_id=product.id
+            ) }}"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <label for="cart-quantity-{{ product.id }}">
+                Anzahl
+            </label>
+
+            <input
+                type="number"
+                id="cart-quantity-{{ product.id }}"
+                name="quantity"
+                value="{{ item.quantity }}"
+                min="0"
+                max="{{ [product.quantity, 10000]|min }}"
+                step="1"
+                required
+            >
+
+            <button
+                class="action-button action-button--secondary"
+                type="submit"
+            >
+                Aktualisieren
+            </button>
+        </form>
+
+        <form
+            method="post"
+            action="{{ url_for(
+                'cart_remove',
+                product_id=product.id
+            ) }}"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <button
+                class="action-button action-button--secondary"
+                type="submit"
+            >
+                Entfernen
+            </button>
+        </form>
+    </article>
+
+    {% else %}
+    <p>Dein Warenkorb ist leer.</p>
+    {% endfor %}
+
+    {% if items %}
+    <h2>
+        Gesamtsumme:
+        CHF {{ "%.2f"|format(total_cents / 100) }}
+    </h2>
+
+    <p>
+        Es gelten die aktuellen Preise.
+        Produkte im Warenkorb sind noch nicht reserviert.
+    </p>
+    {% endif %}
+
+    <p>
+        Dies ist ein Schulprojekt.
+        Es werden keine echten Zahlungen durchgeführt.
+    </p>
+
+    <a
+        class="action-button"
+        href="{{ url_for('shop') }}"
+    >
+        Weiter einkaufen
+    </a>
+</section>
+{% endblock %}

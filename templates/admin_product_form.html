@@ -1,10 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Produkt erstellen{% endblock %}
+{% block title %}
+{{ 'Produkt bearbeiten' if product else 'Produkt erstellen' }}
+{% endblock %}
 
 {% block content %}
 <section>
-    <h1>Produkt erstellen</h1>
+    <h1>
+        {{ 'Produkt bearbeiten' if product else 'Produkt erstellen' }}
+    </h1>
 
     {% if error %}
     <p role="alert">{{ error }}</p>
@@ -14,7 +18,8 @@
         class="shop-form"
         method="post"
         enctype="multipart/form-data"
-        action="{{ url_for('admin_product_create') }}"
+        action="{{ url_for('admin_product_edit', product_id=product.id)
+                    if product else url_for('admin_product_create') }}"
     >
         <input
             type="hidden"
@@ -28,7 +33,10 @@
                 type="text"
                 id="name"
                 name="name"
-                value="{{ request.form.get('name', '') }}"
+                value="{{ request.form.get(
+                    'name',
+                    product.name if product else ''
+                ) }}"
                 maxlength="150"
                 required
             >
@@ -41,7 +49,7 @@
                 name="description"
                 rows="5"
                 maxlength="10000"
-            >{{ request.form.get('description', '') }}</textarea>
+            >{{ request.form.get('description', product.description if product else '') }}</textarea>
         </div>
 
         <div>
@@ -51,7 +59,11 @@
                 id="price"
                 name="price"
                 inputmode="decimal"
-                value="{{ request.form.get('price', '') }}"
+                value="{{ request.form.get(
+                    'price',
+                    ('%.2f'|format(product.price_cents / 100))
+                    if product else ''
+                ) }}"
                 placeholder="Zum Beispiel: 19.90"
                 maxlength="8"
                 required
@@ -64,7 +76,10 @@
                 type="number"
                 id="quantity"
                 name="quantity"
-                value="{{ request.form.get('quantity', '0') }}"
+                value="{{ request.form.get(
+                    'quantity',
+                    product.quantity if product else 0
+                ) }}"
                 min="0"
                 max="10000"
                 step="1"
@@ -74,10 +89,27 @@
 
         <div>
             <label for="photo">Produktbild (optional)</label>
+
+            {% if product and product.image %}
+            <p>Aktuelles Bild:</p>
+            <img
+                class="product-photo"
+                src="{{ url_for('static', filename=product.image) }}"
+                alt="Produktbild: {{ product.name }}"
+                width="180"
+                height="180"
+            >
+            <p>
+                Ohne neue Datei bleibt das aktuelle Bild erhalten.
+                Eine neue Datei ersetzt es.
+            </p>
+            {% endif %}
+
             <p id="photo-help">
                 JPG, PNG oder WEBP, höchstens 5 MB.
                 Bitte nur Bilder verwenden, die du verwenden darfst.
             </p>
+
             <input
                 type="file"
                 id="photo"

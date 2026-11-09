@@ -219,6 +219,18 @@ class Product(db.Model):
         nullable=True
     )
 
+    sizes = db.Column(
+        db.String(200),
+        nullable=False,
+        default=""
+    )
+
+    active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True
+    )
+
     __table_args__ = (
         db.CheckConstraint(
             "price_cents >= 0",
