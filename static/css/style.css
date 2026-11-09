@@ -370,3 +370,27 @@ img {
 .product-description {
     white-space: pre-line;
 }
+
+.shop-sort-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 24px 0;
+}
+
+.shop-sort-form select {
+    max-width: 100%;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 1rem;
+    color: #F9FAFB;
+    background: #111827;
+    border: 1px solid #9CA3AF;
+    border-radius: 4px;
+}
+
+.shop-sort-form select:focus-visible {
+    outline: 2px solid #FF6B00;
+    outline-offset: 3px;
+}

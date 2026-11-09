@@ -1845,15 +1845,50 @@ def membership():
 
 @app.route("/shop")
 def shop():
+    sorting = {
+        "name_asc": (
+            db.func.lower(Product.name).asc(),
+            Product.id.asc()
+        ),
+        "name_desc": (
+            db.func.lower(Product.name).desc(),
+            Product.id.asc()
+        ),
+        "price_asc": (
+            Product.price_cents.asc(),
+            Product.id.asc()
+        ),
+        "price_desc": (
+            Product.price_cents.desc(),
+            Product.id.asc()
+        ),
+        "newest": (
+            Product.created_at.is_(None).asc(),
+            Product.created_at.desc(),
+            Product.id.desc()
+        ),
+        "oldest": (
+            Product.created_at.is_(None).asc(),
+            Product.created_at.asc(),
+            Product.id.asc()
+        ),
+    }
+
+    sort = request.args.get("sort", "name_asc")
+
+    if sort not in sorting:
+        sort = "name_asc"
+
     products = db.session.execute(
         db.select(Product)
         .where(Product.active.is_(True))
-        .order_by(Product.name)
+        .order_by(*sorting[sort])
     ).scalars().all()
 
     return render_template(
         "shop.html",
-        products=products
+        products=products,
+        sort=sort
     )
 
 def read_cart():
@@ -2626,6 +2661,74 @@ def add_product_quantity():
     click.echo(
         "Die Spalte products.quantity wurde hinzugefügt."
     )
+
+@app.cli.command("add-product-created-at")
+def add_product_created_at():
+    import sqlite3
+    import secrets
+    from pathlib import Path
+    from contextlib import closing
+    from sqlalchemy import inspect, text
+
+    if db.engine.url.get_backend_name() != "sqlite":
+        raise click.ClickException(
+            "Diese Migration unterstützt nur SQLite."
+        )
+
+    inspector = inspect(db.engine)
+
+    if not inspector.has_table("products"):
+        raise click.ClickException(
+            "Die Tabelle products fehlt. Zuerst init-db ausführen."
+        )
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("products")
+    }
+
+    if "created_at" in columns:
+        click.echo("Die Spalte created_at ist bereits vorhanden.")
+        return
+
+    database = db.engine.url.database
+
+    if not database or database == ":memory:":
+        raise click.ClickException(
+            "Keine SQLite-Dateidatenbank gefunden."
+        )
+
+    database_path = Path(database).resolve()
+
+    if not database_path.is_file():
+        raise click.ClickException(
+            "Die SQLite-Datei wurde nicht gefunden."
+        )
+
+    backup_folder = Path(app.instance_path) / "backups"
+    backup_folder.mkdir(parents=True, exist_ok=True)
+
+    backup_path = backup_folder / (
+        f"before_product_created_at_{secrets.token_hex(8)}.db"
+    )
+
+    db.session.remove()
+
+    with closing(sqlite3.connect(str(database_path))) as source:
+        with closing(sqlite3.connect(str(backup_path))) as backup:
+            source.backup(backup)
+
+    click.echo(f"Backup erstellt: {backup_path}")
+
+    with db.engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE products "
+                "ADD COLUMN created_at DATETIME"
+            )
+        )
+
+    click.echo("Die Spalte products.created_at wurde hinzugefügt.")
 
 if __name__ == "__main__":
     app.run(debug=True)

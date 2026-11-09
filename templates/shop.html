@@ -13,6 +13,64 @@
         Es werden keine echten Zahlungen durchgeführt.
     </p>
 
+    <form
+        class="shop-sort-form"
+        method="get"
+        action="{{ url_for('shop') }}"
+    >
+        <label for="shop-sort">Sortieren nach</label>
+
+        <select id="shop-sort" name="sort">
+            <option
+                value="name_asc"
+                {% if sort == 'name_asc' %}selected{% endif %}
+            >
+                Name: A–Z
+            </option>
+
+            <option
+                value="name_desc"
+                {% if sort == 'name_desc' %}selected{% endif %}
+            >
+                Name: Z–A
+            </option>
+
+            <option
+                value="price_asc"
+                {% if sort == 'price_asc' %}selected{% endif %}
+            >
+                Preis: aufsteigend
+            </option>
+
+            <option
+                value="price_desc"
+                {% if sort == 'price_desc' %}selected{% endif %}
+            >
+                Preis: absteigend
+            </option>
+            <option
+                value="newest"
+                {% if sort == 'newest' %}selected{% endif %}
+            >
+                Neueste zuerst
+            </option>
+
+            <option
+                value="oldest"
+                {% if sort == 'oldest' %}selected{% endif %}
+            >
+                Älteste zuerst
+            </option>
+        </select>
+
+        <button
+            class="action-button action-button--secondary"
+            type="submit"
+        >
+            Sortieren
+        </button>
+    </form>
+
     <div class="shop-grid">
         {% for product in products %}
         <article class="product-card">

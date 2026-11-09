@@ -231,6 +231,12 @@ class Product(db.Model):
         default=True
     )
 
+    created_at = db.Column(
+        db.DateTime,
+        nullable=True,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
     __table_args__ = (
         db.CheckConstraint(
             "price_cents >= 0",
