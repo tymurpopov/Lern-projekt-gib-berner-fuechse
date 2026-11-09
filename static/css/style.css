@@ -244,3 +244,34 @@ img {
     border-radius: 50%;
     background-color: #111827;
 }
+
+.product-photo {
+    display: block;
+    width: 180px;
+    height: 180px;
+    max-width: 100%;
+    object-fit: contain;
+    background-color: #111827;
+    border-radius: 8px;
+    margin: 16px 0;
+}
+
+.shop-form > div {
+    margin-bottom: 16px;
+}
+
+.shop-form label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: bold;
+}
+
+.shop-form input:not([type="hidden"]),
+.shop-form textarea {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 460px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 1rem;
+}

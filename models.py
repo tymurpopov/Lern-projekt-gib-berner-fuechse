@@ -182,3 +182,50 @@ class Member(db.Model):
         backref=db.backref("members"),
         order_by="Team.name"
     )
+
+class Product(db.Model):
+    __tablename__ = "products"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    name = db.Column(
+        db.String(150),
+        nullable=False
+    )
+
+    description = db.Column(
+        db.Text,
+        nullable=False,
+        default=""
+    )
+
+    price_cents = db.Column(
+        db.Integer,
+        nullable=False
+    )
+
+    quantity = db.Column(
+        "stock",
+        db.Integer,
+        nullable=False,
+        default=0
+    )
+
+    image = db.Column(
+        db.String(255),
+        nullable=True
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "price_cents >= 0",
+            name="check_product_price_nonnegative"
+        ),
+        db.CheckConstraint(
+            "stock >= 0",
+            name="check_product_quantity_nonnegative"
+        ),
+    )

@@ -1,5 +1,14 @@
 from flask import Flask, render_template
-from models import db, Event, Team, Admin, TeamApplication, MemberApplication, Member
+from models import (
+    db,
+    Event,
+    Team,
+    Admin,
+    TeamApplication,
+    MemberApplication,
+    Member,
+    Product,
+)
 from werkzeug.security import generate_password_hash, check_password_hash
 import click
 from flask import (
@@ -46,6 +55,7 @@ if not app.config["SECRET_KEY"]:
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=2)
+app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024
 
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///berner_fuechse.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -1401,6 +1411,170 @@ def admin_event_delete(event_id):
 
     return redirect(url_for("admin_events"))
 
+def shop_photo_folder():
+    return Path(app.static_folder) / "img" / "shop"
+
+
+def save_shop_photo(upload):
+    if upload is None or not upload.filename:
+        return None
+
+    content = upload.stream.read(5 * 1024 * 1024 + 1)
+
+    if not content or len(content) > 5 * 1024 * 1024:
+        raise ValueError(
+            "Bitte ein nicht leeres Bild mit höchstens 5 MB auswählen."
+        )
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "error",
+                Image.DecompressionBombWarning
+            )
+
+            with Image.open(BytesIO(content)) as original:
+                if original.format not in {"JPEG", "PNG", "WEBP"}:
+                    raise ValueError(
+                        "Bitte ein JPG-, PNG- oder WEBP-Bild auswählen."
+                    )
+
+                if original.width * original.height > 12_000_000:
+                    raise ValueError(
+                        "Das Bild darf höchstens 12 Megapixel haben."
+                    )
+
+                original.load()
+                photo = ImageOps.exif_transpose(original).convert("RGBA")
+
+    except (
+        UnidentifiedImageError,
+        OSError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning
+    ):
+        raise ValueError(
+            "Die Datei konnte nicht als gültiges Bild gelesen werden."
+        )
+
+    photo.thumbnail((1200, 1200))
+    photo.info.clear()
+
+    folder = shop_photo_folder()
+    folder.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{secrets.token_hex(16)}.png"
+    photo.save(folder / filename, format="PNG")
+
+    return f"img/shop/{filename}"
+
+
+def read_product_form():
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    price = request.form.get("price", "").strip().replace(",", ".")
+    quantity = request.form.get("quantity", "").strip()
+
+    if not name or len(name) > 150:
+        raise ValueError(
+            "Der Produktname muss 1 bis 150 Zeichen lang sein."
+        )
+
+    if len(description) > 10000:
+        raise ValueError("Die Beschreibung ist zu lang.")
+
+    if not re.fullmatch(r"[0-9]{1,5}(?:\.[0-9]{1,2})?", price):
+        raise ValueError(
+            "Bitte einen Preis von 0 bis 99999.99 CHF eingeben."
+        )
+
+    if (
+        not re.fullmatch(r"[0-9]{1,5}", quantity)
+        or int(quantity) > 10000
+    ):
+        raise ValueError(
+            "Der Lagerbestand muss zwischen 0 und 10000 liegen."
+        )
+
+    francs, _, cents = price.partition(".")
+    price_cents = int(francs) * 100 + int(cents.ljust(2, "0"))
+
+    return {
+        "name": name,
+        "description": description,
+        "price_cents": price_cents,
+        "quantity": int(quantity),
+    }
+
+
+@app.route("/admin/shop")
+@admin_required
+def admin_shop():
+    products = db.session.execute(
+        db.select(Product).order_by(Product.name)
+    ).scalars().all()
+
+    return render_template(
+        "admin_shop.html",
+        products=products
+    )
+
+
+@app.route("/admin/shop/new", methods=["GET", "POST"])
+@admin_required
+def admin_product_create():
+    error = None
+    photo_path = None
+
+    if request.method == "POST":
+        check_csrf()
+
+        try:
+            values = read_product_form()
+            photo_path = save_shop_photo(request.files.get("photo"))
+
+            db.session.add(Product(**values, image=photo_path))
+            db.session.commit()
+
+        except ValueError as exc:
+            db.session.rollback()
+            error = str(exc)
+
+        except (OSError, SQLAlchemyError):
+            db.session.rollback()
+
+            app.logger.exception(
+                "Produkt konnte nicht gespeichert werden."
+            )
+
+            if photo_path:
+                try:
+                    (Path(app.static_folder) / photo_path).unlink(
+                        missing_ok=True
+                    )
+                except OSError:
+                    app.logger.exception(
+                        "Neues Produktbild konnte nicht entfernt werden."
+                    )
+
+            error = (
+                "Das Produkt konnte nicht gespeichert werden. "
+                "Bitte erneut versuchen."
+            )
+
+        else:
+            flash(
+                "Das Produkt wurde gespeichert.",
+                "shop_admin"
+            )
+
+            return redirect(url_for("admin_shop"))
+
+    return render_template(
+        "admin_product_form.html",
+        error=error
+    )
+
 @app.cli.command("init-db")
 def init_db():
     db.create_all()
@@ -2014,6 +2188,85 @@ def admin_team_application_reject(application_id):
         )
 
     return redirect(url_for("admin_team_applications"))
+
+@app.cli.command("add-product-quantity")
+def add_product_quantity():
+    from datetime import datetime
+    from contextlib import closing
+    import sqlite3
+
+    if db.engine.url.get_backend_name() != "sqlite":
+        raise click.ClickException(
+            "Diese Migration unterstützt nur SQLite."
+        )
+
+    inspector = inspect(db.engine)
+
+    if "products" not in inspector.get_table_names():
+        raise click.ClickException(
+            "Die Tabelle products fehlt. Zuerst init-db ausführen."
+        )
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("products")
+    }
+
+    if "quantity" in columns:
+        click.echo(
+            "Die Spalte products.quantity ist bereits vorhanden."
+        )
+        return
+
+    database = db.engine.url.database
+
+    if not database or database == ":memory:":
+        raise click.ClickException(
+            "Keine SQLite-Dateidatenbank gefunden."
+        )
+
+    database_path = Path(database).resolve()
+
+    if not database_path.is_file():
+        raise click.ClickException(
+            "Die SQLite-Datei wurde nicht gefunden."
+        )
+
+    backup_folder = Path(app.instance_path) / "backups"
+    backup_folder.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_folder / (
+        f"before_product_quantity_{timestamp}_"
+        f"{secrets.token_hex(4)}.db"
+    )
+
+    db.session.remove()
+
+    try:
+        with closing(sqlite3.connect(str(database_path))) as source:
+            with closing(sqlite3.connect(str(backup_path))) as backup:
+                source.backup(backup)
+
+        click.echo(f"Backup erstellt: {backup_path}")
+
+        with db.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE products "
+                    "ADD COLUMN quantity INTEGER NOT NULL "
+                    "DEFAULT 0 CHECK (quantity >= 0)"
+                )
+            )
+
+    except (OSError, sqlite3.Error, SQLAlchemyError) as exc:
+        raise click.ClickException(
+            f"Migration fehlgeschlagen: {exc}"
+        ) from exc
+
+    click.echo(
+        "Die Spalte products.quantity wurde hinzugefügt."
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Shop verwalten{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Shop verwalten</h1>
+
+    {% for message in get_flashed_messages(
+        category_filter=['shop_admin']
+    ) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
+
+    <p>
+        <a
+            class="action-button"
+            href="{{ url_for('admin_product_create') }}"
+        >
+            Neues Produkt erstellen
+        </a>
+    </p>
+
+    {% for product in products %}
+    <article>
+        {% if product.image %}
+        <img
+            class="product-photo"
+            src="{{ url_for('static', filename=product.image) }}"
+            alt="Produktbild: {{ product.name }}"
+            loading="lazy"
+            width="180"
+            height="180"
+        >
+        {% endif %}
+
+        <h2>{{ product.name }}</h2>
+
+        <p>
+            <strong>Preis:</strong>
+            CHF {{ "%.2f"|format(product.price_cents / 100) }}
+        </p>
+
+        <p>
+            <strong>Lagerbestand:</strong>
+            {{ product.quantity }} Stück
+        </p>
+
+        {% if product.quantity == 0 %}
+        <p><strong>Ausverkauft</strong></p>
+        {% endif %}
+
+        {% if product.description %}
+        <p>{{ product.description }}</p>
+        {% endif %}
+    </article>
+    {% else %}
+    <p>Es sind noch keine Produkte eingetragen.</p>
+    {% endfor %}
+
+    <p>
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('admin_dashboard') }}"
+        >
+            Zurück zum Admin-Bereich
+        </a>
+    </p>
+</section>
+{% endblock %}

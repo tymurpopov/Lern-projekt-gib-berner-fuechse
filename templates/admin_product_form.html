@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Produkt erstellen{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Produkt erstellen</h1>
+
+    {% if error %}
+    <p role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form
+        class="shop-form"
+        method="post"
+        enctype="multipart/form-data"
+        action="{{ url_for('admin_product_create') }}"
+    >
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <div>
+            <label for="name">Produktname</label>
+            <input
+                type="text"
+                id="name"
+                name="name"
+                value="{{ request.form.get('name', '') }}"
+                maxlength="150"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="description">Beschreibung</label>
+            <textarea
+                id="description"
+                name="description"
+                rows="5"
+                maxlength="10000"
+            >{{ request.form.get('description', '') }}</textarea>
+        </div>
+
+        <div>
+            <label for="price">Preis in CHF</label>
+            <input
+                type="text"
+                id="price"
+                name="price"
+                inputmode="decimal"
+                value="{{ request.form.get('price', '') }}"
+                placeholder="Zum Beispiel: 19.90"
+                maxlength="8"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="quantity">Anzahl auf Lager</label>
+            <input
+                type="number"
+                id="quantity"
+                name="quantity"
+                value="{{ request.form.get('quantity', '0') }}"
+                min="0"
+                max="10000"
+                step="1"
+                required
+            >
+        </div>
+
+        <div>
+            <label for="photo">Produktbild (optional)</label>
+            <p id="photo-help">
+                JPG, PNG oder WEBP, höchstens 5 MB.
+                Bitte nur Bilder verwenden, die du verwenden darfst.
+            </p>
+            <input
+                type="file"
+                id="photo"
+                name="photo"
+                accept="image/jpeg,image/png,image/webp"
+                aria-describedby="photo-help"
+            >
+        </div>
+
+        <div class="action-group">
+            <button class="action-button" type="submit">
+                Speichern
+            </button>
+
+            <a
+                class="action-button action-button--secondary"
+                href="{{ url_for('admin_shop') }}"
+            >
+                Abbrechen
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}
