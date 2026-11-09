@@ -2730,5 +2730,9 @@ def add_product_created_at():
 
     click.echo("Die Spalte products.created_at wurde hinzugefügt.")
 
+from checkout import register_checkout
+
+register_checkout(app, read_cart, check_csrf)
+
 if __name__ == "__main__":
     app.run(debug=True)

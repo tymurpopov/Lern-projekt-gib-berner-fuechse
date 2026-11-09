@@ -247,3 +247,102 @@ class Product(db.Model):
             name="check_product_quantity_nonnegative"
         ),
     )
+
+class Order(db.Model):
+    __tablename__ = "test_orders"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    token = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False
+    )
+
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default="pending"
+    )
+
+    total_cents = db.Column(
+        db.Integer,
+        nullable=False
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    paid_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
+
+    items = db.relationship(
+        "OrderItem",
+        cascade="all, delete-orphan",
+        order_by="OrderItem.id",
+        lazy="selectin"
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "total_cents >= 0",
+            name="check_order_total"
+        ),
+        db.CheckConstraint(
+            "status IN ('pending', 'test_paid')",
+            name="check_order_status"
+        ),
+    )
+
+
+class OrderItem(db.Model):
+    __tablename__ = "test_order_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    order_id = db.Column(
+        db.Integer,
+        db.ForeignKey("test_orders.id"),
+        nullable=False
+    )
+
+    product_id = db.Column(
+        db.Integer,
+        nullable=False
+    )
+
+    product_name = db.Column(
+        db.String(150),
+        nullable=False
+    )
+
+    quantity = db.Column(
+        db.Integer,
+        nullable=False
+    )
+
+    unit_price_cents = db.Column(
+        db.Integer,
+        nullable=False
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "quantity > 0",
+            name="check_order_item_quantity"
+        ),
+        db.CheckConstraint(
+            "unit_price_cents >= 0",
+            name="check_order_item_price"
+        ),
+        db.UniqueConstraint(
+            "order_id",
+            "product_id",
+            name="unique_order_product"
+        ),
+    )

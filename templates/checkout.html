@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}
+Testzahlung bestätigen
+{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Bestellung prüfen</h1>
+
+    <p>
+        <strong>
+            Nur eine Testzahlung für das Schulprojekt.
+        </strong>
+        Es wird kein echtes Geld abgebucht.
+        Keine Kartendaten eingeben.
+    </p>
+
+    {% for item in order.items %}
+    <article class="product-card">
+        <h2>{{ item.product_name }}</h2>
+
+        <p>
+            {{ item.quantity }} Stück ×
+            CHF {{ "%.2f"|format(item.unit_price_cents / 100) }}
+        </p>
+
+        <p>
+            Zwischensumme:
+            CHF {{ "%.2f"|format(
+                item.quantity * item.unit_price_cents / 100
+            ) }}
+        </p>
+    </article>
+    {% endfor %}
+
+    <h2>
+        Gesamtsumme:
+        CHF {{ "%.2f"|format(order.total_cents / 100) }}
+    </h2>
+
+    <p>
+        Erst nach der Bestätigung wird der Lagerbestand reduziert.
+        Bei geänderten Preisen oder ungenügendem Bestand
+        wird die gesamte Testzahlung abgebrochen.
+    </p>
+
+    <form
+        method="post"
+        action="{{ url_for('checkout') }}"
+    >
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <input
+            type="hidden"
+            name="order_token"
+            value="{{ order.token }}"
+        >
+
+        <button
+            class="action-button"
+            type="submit"
+        >
+            Zahlung bestätigen
+        </button>
+
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('cart_view') }}"
+        >
+            Zurück zum Warenkorb
+        </a>
+    </form>
+</section>
+{% endblock %}

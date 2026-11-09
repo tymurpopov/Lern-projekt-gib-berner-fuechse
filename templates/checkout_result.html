@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}
+Testzahlung erfolgreich
+{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Testzahlung erfolgreich</h1>
+
+    <p role="status">
+        Die Testbestellung wurde gespeichert.
+        Der Lagerbestand wurde reduziert.
+    </p>
+
+    <p>
+        <strong>
+            Schulprojekt: Es wurde kein echtes Geld bezahlt.
+        </strong>
+    </p>
+
+    <h2>Testbestellung Nr. {{ order.id }}</h2>
+
+    <ul>
+        {% for item in order.items %}
+        <li>
+            {{ item.product_name }} —
+            {{ item.quantity }} Stück —
+            CHF {{ "%.2f"|format(
+                item.quantity * item.unit_price_cents / 100
+            ) }}
+        </li>
+        {% endfor %}
+    </ul>
+
+    <p>
+        <strong>
+            Gesamtsumme:
+            CHF {{ "%.2f"|format(order.total_cents / 100) }}
+        </strong>
+    </p>
+
+    <a
+        class="action-button"
+        href="{{ url_for('shop') }}"
+    >
+        Weiter einkaufen
+    </a>
+</section>
+{% endblock %}
