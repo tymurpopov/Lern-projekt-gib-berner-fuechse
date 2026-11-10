@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 
 {% block title %}{{ team.name }}{% endblock %}
@@ -26,38 +27,51 @@
 
     <h2>Spieler im Team</h2>
 
-    {% for member in members %}
-    <div class="identity-heading">
-        {% set photo = public_member_photo(member.application) %}
+    <div class="data-grid">
+        {% for member in members %}
+        <div class="data-card">
+            {% set photo = public_member_photo(member.application) %}
 
-        {% if photo %}
-        <img
-            class="identity-icon identity-icon--member"
-            src="{{ url_for(
-                'static',
-                filename='img/mitglieder/' ~ photo
-            ) }}"
-            alt="Foto von {{ member.application.nickname }}"
-        >
-        {% endif %}
+            <div class="identity-heading">
+                {% if photo %}
+                <img
+                    class="identity-icon identity-icon--member"
+                    src="{{ url_for(
+                        'static',
+                        filename='img/mitglieder/' ~ photo
+                    ) }}"
+                    alt="Foto von {{ member.application.nickname }}"
+                >
+                {% endif %}
 
-        <h3>
-            <a href="{{ url_for('member_profile', member_id=member.id) }}">
-                {{ member.application.nickname }}
-            </a>
-        </h3>
+                <h3>
+                    <a href="{{ url_for(
+                        'member_profile',
+                        member_id=member.id
+                    ) }}">
+                        {{ member.application.nickname }}
+                    </a>
+                </h3>
+            </div>
+
+            <p>
+                <strong>Spiel:</strong>
+                {{ member.application.game }}
+
+                {% if member.application.role %}
+                — <strong>Rolle:</strong>
+                {{ member.application.role }}
+                {% endif %}
+            </p>
+        </div>
+
+        {% else %}
+        <p>
+            Zurzeit sind keine öffentlichen Spielerprofile
+            in diesem Team.
+        </p>
+        {% endfor %}
     </div>
-
-    <p>
-        <strong>Spiel:</strong>
-        {{ member.application.game }}
-        {% if member.application.role %}
-        — <strong>Rolle:</strong> {{ member.application.role }}
-        {% endif %}
-    </p>
-    {% else %}
-    <p>Zurzeit sind keine öffentlichen Spielerprofile in diesem Team.</p>
-    {% endfor %}
 
     <div class="action-group">
         <a

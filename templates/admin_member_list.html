@@ -11,7 +11,7 @@
     ) %}
     <p role="status">{{ message }}</p>
     {% endfor %}
-
+    <div class="data-grid">
     {% for member in members %}
     {% set application = member.application %}
     {% set photo = public_member_photo(application) %}
@@ -63,7 +63,7 @@
     {% else %}
     <p>Es sind noch keine Mitglieder eingetragen.</p>
     {% endfor %}
-
+    </div>
     <p>
         <a href="{{ url_for('admin_member_applications') }}">
             Mitgliedsanträge prüfen

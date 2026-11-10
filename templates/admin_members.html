@@ -11,7 +11,7 @@
     ) %}
     <p role="status">{{ message }}</p>
     {% endfor %}
-
+    <div class="data-grid data-grid--wide">
     {% for application in applications %}
     {% set member = members_by_application.get(application.id) %}
     <article>
@@ -24,7 +24,7 @@
                 application_id=application.id
             ) }}"
             alt="Eingereichtes Foto von {{ application.nickname }}"
-            style="max-width: 300px; max-height: 240px; object-fit: contain;"
+            style="max-width: min(100%, 300px); max-height: 240px; object-fit: contain;"
         >
         {% endif %}
 
@@ -190,7 +190,7 @@
     {% else %}
     <p>Es sind noch keine Mitgliedsanträge eingegangen.</p>
     {% endfor %}
-
+    </div>
     <p>
         <a href="{{ url_for('admin_members') }}">
             Mitglieder verwalten

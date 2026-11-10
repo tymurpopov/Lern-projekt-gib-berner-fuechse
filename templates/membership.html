@@ -21,7 +21,7 @@
 
 <section>
     <h2>Unsere Mitglieder</h2>
-
+    <div class="data-grid">
     {% for member in members %}
     <article>
         {% set photo = public_member_photo(member.application) %}
@@ -59,7 +59,7 @@
         <h4>Teams</h4>
 
         {% if member.teams %}
-        <ul>
+        <ul class="data-grid data-grid--compact">
             {% for team in member.teams %}
             <li class="team-line">
                 {% if team.image %}
@@ -94,5 +94,6 @@
     {% else %}
     <p>Zurzeit sind keine öffentlichen Spielerprofile verfügbar.</p>
     {% endfor %}
+    </div>
 </section>
 {% endblock %}

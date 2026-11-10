@@ -8,6 +8,7 @@ from models import (
     MemberApplication,
     Member,
     Product,
+    DemoOrder,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 import click
@@ -43,6 +44,7 @@ from pathlib import Path
 from contextlib import closing
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+import json
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
@@ -2044,10 +2046,20 @@ def cart_view():
             "cart_message"
         )
 
+    checkout_token = session.get("checkout_token")
+
+    if (
+        not isinstance(checkout_token, str)
+        or not re.fullmatch(r"[a-f0-9]{32}", checkout_token)
+    ):
+        checkout_token = secrets.token_hex(16)
+        session["checkout_token"] = checkout_token
+
     return render_template(
         "cart.html",
         items=items,
-        total_cents=total_cents
+        total_cents=total_cents,
+        checkout_token=checkout_token
     )
 
 
@@ -2111,6 +2123,180 @@ def cart_remove(product_id):
 
     flash(
         "Das Produkt wurde aus dem Warenkorb entfernt.",
+        "cart_message"
+    )
+
+    return redirect(url_for("cart_view"))
+
+@app.route("/cart/checkout", methods=["POST"])
+def cart_checkout():
+    check_csrf()
+
+    token = request.form.get("checkout_token", "")
+    expected = session.get("checkout_token", "")
+
+    if (
+        not re.fullmatch(r"[a-f0-9]{32}", token)
+        or not isinstance(expected, str)
+        or not hmac.compare_digest(token, expected)
+    ):
+        flash(
+            "Die Bestellung wurde bereits verarbeitet oder "
+            "die Seite ist abgelaufen. Bitte den Warenkorb neu laden.",
+            "cart_message"
+        )
+        return redirect(url_for("cart_view"))
+
+    order = db.session.execute(
+        db.select(DemoOrder).where(DemoOrder.token == token)
+    ).scalar_one_or_none()
+
+    if order is None:
+        cart = read_cart()
+
+        selected = list(dict.fromkeys(
+            request.form.getlist("selected_products")
+        ))
+
+        if (
+            not selected
+            or len(selected) > 50
+            or any(key not in cart for key in selected)
+        ):
+            flash(
+                "Bitte mindestens ein gültiges Produkt auswählen.",
+                "cart_message"
+            )
+            return redirect(url_for("cart_view"))
+
+        if request.form.get("confirm_demo") != "yes":
+            flash(
+                "Bitte bestätigen, dass dies nur ein Testkauf ist.",
+                "cart_message"
+            )
+            return redirect(url_for("cart_view"))
+
+        try:
+            order = DemoOrder(token=token)
+            db.session.add(order)
+            db.session.flush()
+
+            products = db.session.execute(
+                db.select(Product)
+                .where(
+                    Product.id.in_([int(key) for key in selected]),
+                    Product.active.is_(True)
+                )
+                .order_by(Product.id)
+            ).scalars().all()
+
+            if len(products) != len(selected):
+                raise ValueError(
+                    "Ein ausgewähltes Produkt ist nicht mehr verfügbar."
+                )
+
+            records = []
+            total_cents = 0
+
+            for product in products:
+                quantity = cart[str(product.id)]
+                price_cents = product.price_cents
+                name = product.name
+
+                result = db.session.execute(
+                    db.update(Product)
+                    .where(
+                        Product.id == product.id,
+                        Product.active.is_(True),
+                        Product.quantity >= quantity,
+                        Product.price_cents == price_cents
+                    )
+                    .values(
+                        quantity=Product.quantity - quantity
+                    )
+                    .execution_options(synchronize_session=False)
+                )
+
+                if result.rowcount != 1:
+                    raise ValueError(
+                        "Bestand oder Preis hat sich geändert. "
+                        "Bitte den Warenkorb neu laden."
+                    )
+
+                records.append({
+                    "product_id": product.id,
+                    "name": name,
+                    "quantity": quantity,
+                    "price_cents": price_cents,
+                })
+
+                total_cents += price_cents * quantity
+
+            order.total_cents = total_cents
+            order.items_json = json.dumps(
+                records,
+                ensure_ascii=False
+            )
+
+            db.session.commit()
+
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), "cart_message")
+            return redirect(url_for("cart_view"))
+
+        except IntegrityError:
+            db.session.rollback()
+
+            order = db.session.execute(
+                db.select(DemoOrder).where(DemoOrder.token == token)
+            ).scalar_one_or_none()
+
+            if order is None:
+                app.logger.exception(
+                    "Testbestellung konnte nicht gespeichert werden."
+                )
+                flash(
+                    "Der Testkauf konnte nicht abgeschlossen werden.",
+                    "cart_message"
+                )
+                return redirect(url_for("cart_view"))
+
+        except SQLAlchemyError:
+            db.session.rollback()
+
+            app.logger.exception(
+                "Testbestellung fehlgeschlagen."
+            )
+
+            flash(
+                "Der Testkauf konnte nicht abgeschlossen werden. "
+                "Bitte erneut versuchen.",
+                "cart_message"
+            )
+            return redirect(url_for("cart_view"))
+
+    cart = read_cart()
+
+    for record in json.loads(order.items_json):
+        key = str(record["product_id"])
+        remaining = max(
+            0,
+            cart.get(key, 0) - record["quantity"]
+        )
+
+        if remaining:
+            cart[key] = remaining
+        else:
+            cart.pop(key, None)
+
+    session["cart"] = cart
+    session.pop("checkout_token", None)
+
+    flash(
+        f"Testbestellung Nr. {order.id}: "
+        f"CHF {order.total_cents / 100:.2f} abgeschlossen. "
+        "Keine echte Zahlung.",
         "cart_message"
     )
 

@@ -9,7 +9,7 @@
             Neues Event erstellen
         </a>
     </p>
-
+    <div class="data-grid">
     {% for event in events %}
     <article>
         {% if event.image %}
@@ -57,7 +57,7 @@
     {% else %}
     <p>Es sind noch keine Events eingetragen.</p>
     {% endfor %}
-
+    </div>
     <p>
         <a href="{{ url_for('admin_dashboard') }}">
             Zurück zum Admin-Bereich

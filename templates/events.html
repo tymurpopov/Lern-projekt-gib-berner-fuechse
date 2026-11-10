@@ -6,7 +6,7 @@
 <section>
     <h1>Events</h1>
     <p>Hier findest du die Veranstaltungen der Berner Füchse.</p>
-
+    <div class="data-grid">
     {% for event in events %}
     <article>
 
@@ -46,5 +46,6 @@
     {% else %}
     <p>Zurzeit sind keine Veranstaltungen eingetragen.</p>
     {% endfor %}
+    </div>
 </section>
 {% endblock %}

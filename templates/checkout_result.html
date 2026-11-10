@@ -21,7 +21,7 @@ Testzahlung erfolgreich
 
     <h2>Testbestellung Nr. {{ order.id }}</h2>
 
-    <ul>
+    <ul class="data-grid">
         {% for item in order.items %}
         <li>
             {{ item.product_name }} —

@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 
 {% block title %}Teams{% endblock %}
@@ -10,76 +11,79 @@
         Hier stellen wir die Teams der Berner Füchse vor.
         Fairplay, Teamgeist und Respekt stehen bei uns im Mittelpunkt.
     </p>
-
-    {% for team in teams %}
-    <article>
-        <div class="identity-heading">
-            {% if team.image %}
-            <img
-                class="identity-icon identity-icon--team"
-                src="{{ url_for('static', filename=team.image) }}"
-                alt="Logo von {{ team.name }}"
-                loading="lazy"
-                width="48"
-                height="48"
-            >
-            {% endif %}
-
-            <h2>
-                {{ team.name }}
-            </h2>
-        </div>
-
-        <p><strong>Spiel:</strong> {{ team.game }}</p>
-        <p><strong>Spielniveau:</strong> {{ team.level }}</p>
-        <p><strong>Mitglieder:</strong> {{ team.member_count }}</p>
-
-        <p>
-            {{ team.description or 'Weitere Informationen folgen.' }}
-        </p>
-
-        <h3>Spieler im Team</h3>
-
-        {% for member in team.members
-            if member.application.status == "approved"
-            and member.application.publish_profile %}
-        <div class="identity-heading">
-            {% set photo = public_member_photo(member.application) %}
-
-            {% if photo %}
-            <img
-                class="inline-team-icon"
-                src="{{ url_for(
-                    'static',
-                    filename='img/mitglieder/' ~ photo
-                ) }}"
-                alt="Foto von {{ member.application.nickname }}"
-            >
-            {% endif %}
-
-            <h4>
-                {{ member.application.nickname }}
-            </h4>
-        </div>
-        {% else %}
-        <p>Noch keine öffentlichen Spielerprofile in diesem Team.</p>
-        {% endfor %}
-
-        <p>
-            <a
-                class="action-button action-button--secondary"
-                href="{{ url_for('team_profile', team_id=team.id) }}"
-            >
-                Team ansehen
-            </a>
-        </p>
-    </article>
-    {% else %}
-    <p>Zurzeit sind keine Teams eingetragen.</p>
-    {% endfor %}
-
     <a class="action-button" href="{{ url_for('teamform') }}">
         Team anmelden
     </a>
+
+    <div class="data-grid">
+        {% for team in teams %}
+        <article>
+            <div class="identity-heading">
+                {% if team.image %}
+                <img
+                    class="identity-icon identity-icon--team"
+                    src="{{ url_for('static', filename=team.image) }}"
+                    alt="Logo von {{ team.name }}"
+                    loading="lazy"
+                    width="48"
+                    height="48"
+                >
+                {% endif %}
+
+                <h2>{{ team.name }}</h2>
+            </div>
+
+            <p><strong>Spiel:</strong> {{ team.game }}</p>
+            <p><strong>Spielniveau:</strong> {{ team.level }}</p>
+            <p><strong>Mitglieder:</strong> {{ team.member_count }}</p>
+
+            <p>
+                {{ team.description or 'Weitere Informationen folgen.' }}
+            </p>
+
+            <h3>Spieler im Team</h3>
+
+            <div class="data-grid data-grid--compact">
+                {% for member in team.members %}
+                    {% if member.application.status == "approved"
+                        and member.application.publish_profile %}
+
+                    <div class="data-card identity-heading">
+                        {% set photo = public_member_photo(member.application) %}
+
+                        {% if photo %}
+                        <img
+                            class="inline-team-icon"
+                            src="{{ url_for(
+                                'static',
+                                filename='img/mitglieder/' ~ photo
+                            ) }}"
+                            alt="Foto von {{ member.application.nickname }}"
+                        >
+                        {% endif %}
+
+                        <h4>{{ member.application.nickname }}</h4>
+                    </div>
+
+                    {% endif %}
+                {% else %}
+                    <p>Noch keine öffentlichen Spielerprofile in diesem Team.</p>
+                {% endfor %}
+            </div>
+
+            <p>
+                <a
+                    class="action-button action-button--secondary"
+                    href="{{ url_for('team_profile', team_id=team.id) }}"
+                >
+                    Team ansehen
+                </a>
+            </p>
+        </article>
+        {% else %}
+        <p>Zurzeit sind keine Teams eingetragen.</p>
+        {% endfor %}
+    </div>
+
 </section>
 {% endblock %}

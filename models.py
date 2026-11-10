@@ -346,3 +346,42 @@ class OrderItem(db.Model):
             name="unique_order_product"
         ),
     )
+
+class DemoOrder(db.Model):
+    __tablename__ = "demo_orders"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    token = db.Column(
+        db.String(32),
+        unique=True,
+        nullable=False
+    )
+
+    total_cents = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0
+    )
+
+    items_json = db.Column(
+        db.Text,
+        nullable=False,
+        default="[]"
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "total_cents >= 0",
+            name="check_demo_order_total_nonnegative"
+        ),
+    )

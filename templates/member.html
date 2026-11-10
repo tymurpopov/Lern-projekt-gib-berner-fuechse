@@ -36,7 +36,7 @@
     <h2>Teams</h2>
 
     {% if member.teams %}
-        <ul>
+        <ul class="data-grid data-grid--compact">
             {% for team in member.teams %}
             <li class="team-line">
                 {% if team.image %}

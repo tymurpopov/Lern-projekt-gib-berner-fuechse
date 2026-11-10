@@ -16,6 +16,24 @@
     {% set product = item.product %}
 
     <article class="product-card cart-item">
+        <p>
+            <label>
+                <input
+                    type="checkbox"
+                    name="selected_products"
+                    value="{{ product.id }}"
+                    form="checkout-form"
+                    data-subtotal="{{ item.subtotal_cents }}"
+                    {% if item.available %}
+                    checked
+                    {% else %}
+                    disabled
+                    {% endif %}
+                >
+                Dieses Produkt kaufen
+            </label>
+        </p>
+
         {% if product.image %}
         <img
             class="product-photo"
@@ -121,30 +139,76 @@
 
     {% if items %}
     <h2>
-        Gesamtsumme:
+        Gesamter Warenkorb:
         CHF {{ "%.2f"|format(total_cents / 100) }}
     </h2>
 
-    <p>
-        Es gelten die aktuellen Preise.
-        Produkte im Warenkorb sind noch nicht reserviert.
-    </p>
+    <section class="checkout-panel">
+        <h2>Testkauf</h2>
 
-    <a
-        class="action-button"
-        href="{{ url_for('checkout') }}"
-    >
-        Zur Zahlung
-    </a>
+        <p>
+            Wähle oben aus, welche Produkte du kaufen möchtest.
+            Nicht ausgewählte Produkte bleiben im Warenkorb.
+        </p>
+
+        <p>
+            <strong>Ausgewählte Produkte:</strong>
+            <span id="selected-total" aria-live="polite">—</span>
+        </p>
+
+        <p>
+            Es gelten die aktuellen Preise und Lagerbestände.
+        </p>
+
+        <form
+            id="checkout-form"
+            method="post"
+            action="{{ url_for('cart_checkout') }}"
+        >
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <input
+                type="hidden"
+                name="checkout_token"
+                value="{{ checkout_token }}"
+            >
+
+            <p>
+                <label>
+                    <input
+                        type="checkbox"
+                        name="confirm_demo"
+                        value="yes"
+                        required
+                    >
+                    Ich verstehe: Dies ist nur ein Testkauf.
+                    Es wird kein echtes Geld bezahlt.
+                </label>
+            </p>
+
+            <button
+                id="checkout-button"
+                class="action-button"
+                type="submit"
+            >
+                Testkauf abschliessen
+            </button>
+        </form>
+    </section>
+
+    <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
     {% endif %}
 
     <p>
-        Dies ist ein Schulprojekt.
-        Es werden keine echten Zahlungen durchgeführt.
+        Schulprojekt: Keine echten Zahlungen.
     </p>
 
     <a
-        class="action-button"
+        class="action-button action-button--secondary"
         href="{{ url_for('shop') }}"
     >
         Weiter einkaufen

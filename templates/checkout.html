@@ -15,7 +15,7 @@ Testzahlung bestätigen
         Es wird kein echtes Geld abgebucht.
         Keine Kartendaten eingeben.
     </p>
-
+    <div class="data-grid">
     {% for item in order.items %}
     <article class="product-card">
         <h2>{{ item.product_name }}</h2>
@@ -33,7 +33,7 @@ Testzahlung bestätigen
         </p>
     </article>
     {% endfor %}
-
+    </div>
     <h2>
         Gesamtsumme:
         CHF {{ "%.2f"|format(order.total_cents / 100) }}

@@ -9,7 +9,7 @@
             Neues Team erstellen
         </a>
     </p>
-
+    <div class="data-grid">
     {% for team in teams %}
     <article>
         {% if team.image %}
@@ -52,7 +52,7 @@
     {% else %}
     <p>Es sind noch keine Teams eingetragen.</p>
     {% endfor %}
-
+    </div>
     <p>
         <a href="{{ url_for('teams') }}">Öffentliche Teamseite</a>
     </p>
