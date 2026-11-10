@@ -6,11 +6,28 @@
 <section>
     <h1>Warenkorb</h1>
 
-    {% for message in get_flashed_messages(
-        category_filter=['cart_message']
+    {% set messages = get_flashed_messages(
+        with_categories=true,
+        category_filter=['cart_message', 'cart_success']
     ) %}
-    <p role="status">{{ message }}</p>
-    {% endfor %}
+
+    {% if messages %}
+    <div id="cart-notices" tabindex="-1">
+        {% for category, message in messages %}
+        <div
+            class="cart-notice {{ 'cart-notice--success'
+                if category == 'cart_success' else '' }}"
+            role="status"
+        >
+            {% if category == 'cart_success' %}
+            <h2>Testkauf abgeschlossen</h2>
+            {% endif %}
+
+            <p>{{ message }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     {% for item in items %}
     {% set product = item.product %}

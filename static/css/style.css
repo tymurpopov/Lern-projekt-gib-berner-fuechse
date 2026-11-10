@@ -490,3 +490,30 @@ img {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+#cart-notices {
+    scroll-margin-top: 20px;
+}
+
+.cart-notice {
+    padding: 18px 20px;
+    margin: 20px 0;
+    border: 2px solid #FF6B00;
+    border-radius: 10px;
+    background-color: #111827;
+    color: #F9FAFB;
+}
+
+.cart-notice--success {
+    border-color: #22C55E;
+    background-color: #102A20;
+}
+
+.cart-notice h2 {
+    margin: 0 0 10px;
+    color: #F9FAFB;
+}
+
+.cart-notice p {
+    margin: 0;
+}

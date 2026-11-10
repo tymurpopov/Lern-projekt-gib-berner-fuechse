@@ -2297,10 +2297,12 @@ def cart_checkout():
         f"Testbestellung Nr. {order.id}: "
         f"CHF {order.total_cents / 100:.2f} abgeschlossen. "
         "Keine echte Zahlung.",
-        "cart_message"
+        "cart_success"
     )
 
-    return redirect(url_for("cart_view"))
+    return redirect(
+        url_for("cart_view", _anchor="cart-notices")
+    )
 
 @app.route("/rules")
 def rules():
