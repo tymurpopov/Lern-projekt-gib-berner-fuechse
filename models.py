@@ -225,6 +225,13 @@ class Product(db.Model):
         default=""
     )
 
+    variants = db.relationship(
+        "ProductVariant",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductVariant.id",
+    )
+
     active = db.Column(
         db.Boolean,
         nullable=False,

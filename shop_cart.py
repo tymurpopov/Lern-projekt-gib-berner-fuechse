@@ -32,11 +32,7 @@ class ProductVariant(db.Model):
 
     product = db.relationship(
         "Product",
-        backref=db.backref(
-            "variants",
-            cascade="all, delete-orphan",
-            order_by="ProductVariant.id",
-        ),
+        back_populates="variants",
     )
 
     __table_args__ = (
