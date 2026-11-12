@@ -517,3 +517,61 @@ img {
 .cart-notice p {
     margin: 0;
 }
+
+.shop-filter-form {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(min(100%, 220px), 1fr)
+    );
+    gap: 16px;
+    margin: 24px 0;
+    align-items: end;
+}
+
+.shop-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.shop-filter-field input[type="search"],
+.shop-filter-field select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 10px;
+    font: inherit;
+    color: #F9FAFB;
+    background: #111827;
+    border: 1px solid #6B7280;
+    border-radius: 6px;
+}
+
+.shop-filter-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+}
+
+.shop-filter-check input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.shop-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 600px) {
+    .shop-filter-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

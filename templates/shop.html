@@ -1,88 +1,107 @@
 {% extends "base.html" %}
-
 {% block title %}Shop{% endblock %}
-
 {% block content %}
 <section>
     <h1>Vereinsshop</h1>
+    <p>Merchandise der Berner Füchse. Schulprojekt: keine echten Zahlungen.</p>
 
-    <p>Merchandise der Berner Füchse.</p>
+    {% for message in get_flashed_messages(category_filter=['cart_message']) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
 
-    <p>
-        Dies ist ein Schulprojekt.
-        Es werden keine echten Zahlungen durchgeführt.
-    </p>
+    <form class="shop-filter-form"
+          method="get"
+          action="{{ url_for('shop') }}">
 
-    <form
-        class="shop-sort-form"
-        method="get"
-        action="{{ url_for('shop') }}"
-    >
-        <label for="shop-sort">Sortieren nach</label>
+        <div class="shop-filter-field">
+            <label for="shop-search">Produktname suchen</label>
+            <input type="search"
+                   id="shop-search"
+                   name="q"
+                   value="{{ q }}"
+                   maxlength="150"
+                   placeholder="Zum Beispiel: Shirt">
+        </div>
 
-        <select id="shop-sort" name="sort">
-            <option
-                value="name_asc"
-                {% if sort == 'name_asc' %}selected{% endif %}
-            >
-                Name: A–Z
-            </option>
+        <div class="shop-filter-field">
+            <label for="shop-size">Grösse – nur verfügbar</label>
+            <select id="shop-size" name="size">
+                <option value="">Alle Grössen</option>
 
-            <option
-                value="name_desc"
-                {% if sort == 'name_desc' %}selected{% endif %}
-            >
-                Name: Z–A
-            </option>
+                <option value="__none__"
+                        {% if selected_size == '__none__' %}selected{% endif %}>
+                    Ohne Grösse
+                </option>
 
-            <option
-                value="price_asc"
-                {% if sort == 'price_asc' %}selected{% endif %}
-            >
-                Preis: aufsteigend
-            </option>
+                {% if selected_size and selected_size != '__none__' and selected_size not in size_options %}
+                <option value="{{ selected_size }}" selected>
+                    {{ selected_size }} – aktuell nicht verfügbar
+                </option>
+                {% endif %}
 
-            <option
-                value="price_desc"
-                {% if sort == 'price_desc' %}selected{% endif %}
-            >
-                Preis: absteigend
-            </option>
-            <option
-                value="newest"
-                {% if sort == 'newest' %}selected{% endif %}
-            >
-                Neueste zuerst
-            </option>
+                {% for size in size_options %}
+                <option value="{{ size }}"
+                        {% if selected_size == size %}selected{% endif %}>
+                    {{ size }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
 
-            <option
-                value="oldest"
-                {% if sort == 'oldest' %}selected{% endif %}
-            >
-                Älteste zuerst
-            </option>
-        </select>
+        <div class="shop-filter-field">
+            <label for="shop-sort">Sortieren nach</label>
+            <select id="shop-sort" name="sort">
+                {% for key, label in [
+                    ('name_asc', 'Name: A–Z'),
+                    ('name_desc', 'Name: Z–A'),
+                    ('price_asc', 'Preis: aufsteigend'),
+                    ('price_desc', 'Preis: absteigend'),
+                    ('newest', 'Neueste zuerst'),
+                    ('oldest', 'Älteste zuerst')
+                ] %}
+                <option value="{{ key }}"
+                        {% if sort == key %}selected{% endif %}>
+                    {{ label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
 
-        <button
-            class="action-button action-button--secondary"
-            type="submit"
-        >
-            Sortieren
-        </button>
+        <div class="shop-filter-field">
+            <label class="shop-filter-check" for="shop-stock">
+                <input type="checkbox"
+                       id="shop-stock"
+                       name="in_stock"
+                       value="1"
+                       {% if in_stock %}checked{% endif %}>
+                Nur auf Lager
+            </label>
+        </div>
+
+        <div class="shop-filter-actions">
+            <button class="action-button" type="submit">
+                Anwenden
+            </button>
+
+            <a class="action-button action-button--secondary"
+               href="{{ url_for('shop') }}">
+                Zurücksetzen
+            </a>
+        </div>
     </form>
 
-    <div class="shop-grid">
+    <p role="status">{{ products|length }} Produkte gefunden.</p>
+
+    <div class="data-grid">
         {% for product in products %}
         <article class="product-card">
             {% if product.image %}
-            <img
-                class="product-photo"
-                src="{{ url_for('static', filename=product.image) }}"
-                alt="Produktbild: {{ product.name }}"
-                loading="lazy"
-                width="180"
-                height="180"
-            >
+            <img class="product-photo"
+                 src="{{ url_for('static', filename=product.image) }}"
+                 alt="Produktbild: {{ product.name }}"
+                 loading="lazy"
+                 width="180"
+                 height="180">
             {% endif %}
 
             <h2>{{ product.name }}</h2>
@@ -92,28 +111,18 @@
             {% endif %}
 
             <p class="product-price">
-                CHF {{ "%.2f"|format(product.price_cents / 100) }}
+                CHF {{ '%.2f'|format(product.price_cents / 100) }}
             </p>
 
             {% if product.sizes %}
-            <p>
-                <strong>Grössen:</strong>
-                {{ product.sizes }}
-            </p>
+            <p><strong>Grössen:</strong> {{ product.sizes }}</p>
             {% endif %}
 
-            <p>
-                Auf Lager: {{ product.quantity }} Stück
-            </p>
+            <p>Auf Lager: {{ product.quantity }} Stück</p>
 
             <p>
-                <a
-                    class="action-button action-button--secondary"
-                    href="{{ url_for(
-                        'product_detail',
-                        product_id=product.id
-                    ) }}"
-                >
+                <a class="action-button action-button--secondary"
+                   href="{{ url_for('product_detail', product_id=product.id) }}">
                     Details ansehen
                 </a>
             </p>
@@ -121,7 +130,10 @@
             {% include "_cart_add_form.html" %}
         </article>
         {% else %}
-        <p>Zurzeit sind keine Produkte verfügbar.</p>
+        <p>
+            Keine passenden Produkte gefunden.
+            Bitte die Filter ändern oder zurücksetzen.
+        </p>
         {% endfor %}
     </div>
 </section>

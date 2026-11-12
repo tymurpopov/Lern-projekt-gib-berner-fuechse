@@ -1863,6 +1863,8 @@ def membership():
 
 @app.route("/shop")
 def shop():
+    from shop_cart import ProductVariant
+
     sorting = {
         "name_asc": (
             db.func.lower(Product.name).asc(),
@@ -1897,16 +1899,86 @@ def shop():
     if sort not in sorting:
         sort = "name_asc"
 
-    products = db.session.execute(
-        db.select(Product)
-        .where(Product.active.is_(True))
-        .order_by(*sorting[sort])
+    q = request.args.get("q", "").strip()[:150]
+    in_stock = request.args.get("in_stock") == "1"
+
+    size = request.args.get("size", "").strip()
+    if size != "__none__":
+        size = size.upper()
+    if len(size) > 32:
+        size = ""
+
+    variant_total = (
+        db.select(
+            db.func.coalesce(db.func.sum(ProductVariant.stock), 0)
+        )
+        .where(ProductVariant.product_id == Product.id)
+        .correlate(Product)
+        .scalar_subquery()
+    )
+
+    has_sized = Product.variants.any(ProductVariant.size != "")
+    has_empty = Product.variants.any(ProductVariant.size == "")
+
+    ready = (
+        Product.variants.any()
+        & (variant_total == Product.quantity)
+        & ~(has_sized & has_empty)
+    )
+
+    size_options = db.session.execute(
+        db.select(ProductVariant.size)
+        .join(Product)
+        .where(
+            Product.active.is_(True),
+            ProductVariant.stock > 0,
+            ProductVariant.size != "",
+            ready,
+        )
+        .distinct()
+        .order_by(ProductVariant.size)
     ).scalars().all()
+
+    statement = db.select(Product).where(
+        Product.active.is_(True)
+    )
+
+    if size:
+        wanted_size = "" if size == "__none__" else size
+
+        statement = statement.where(
+            ready,
+            Product.variants.any(
+                (ProductVariant.size == wanted_size)
+                & (ProductVariant.stock > 0)
+            ),
+        )
+    elif in_stock:
+        statement = statement.where(
+            ready,
+            Product.variants.any(ProductVariant.stock > 0),
+        )
+
+    products = db.session.execute(
+        statement.order_by(*sorting[sort])
+    ).scalars().all()
+
+    if q:
+        needle = q.casefold()
+        products = [
+            product
+            for product in products
+            if needle in product.name.casefold()
+        ]
 
     return render_template(
         "shop.html",
         products=products,
-        sort=sort
+        sort=sort,
+        q=q,
+        in_stock=in_stock,
+        selected_size=size,
+        size_options=size_options,
     )
 
 @app.route("/rules")
