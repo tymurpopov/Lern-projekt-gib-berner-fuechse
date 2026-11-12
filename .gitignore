@@ -13,3 +13,15 @@ instance/
 .DS_Store
 
 key.txt
+
+/static/img/events/*
+!/static/img/events/.gitkeep
+
+/static/img/mitglieder/*
+!/static/img/mitglieder/.gitkeep
+
+/static/img/teams/*
+!/static/img/teams/.gitkeep
+
+/static/img/shop/*
+!/static/img/shop/.gitkeep
