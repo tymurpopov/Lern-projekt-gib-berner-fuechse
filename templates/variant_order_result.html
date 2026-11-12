@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}
+Testbestellung {{ order.id }}
+{% endblock %}
+
+{% block content %}
+<section>
+    <h1>
+        Testbestellung Nr. {{ order.id }} abgeschlossen
+    </h1>
+
+    <p role="status">
+        Die Bestände wurden aktualisiert.
+        Es wurde kein echtes Geld bezahlt.
+    </p>
+
+    <div class="data-grid">
+        {% for item in records %}
+        <article>
+            <h2>{{ item.name }}</h2>
+
+            {% if item.size %}
+            <p>Grösse: {{ item.size }}</p>
+            {% endif %}
+
+            <p>Anzahl: {{ item.quantity }}</p>
+
+            <p>
+                Einzelpreis:
+                CHF {{ '%.2f'|format(item.price_cents / 100) }}
+            </p>
+
+            <p>
+                Summe:
+                CHF {{ '%.2f'|format(
+                    item.quantity * item.price_cents / 100
+                ) }}
+            </p>
+        </article>
+        {% endfor %}
+    </div>
+
+    <h2>
+        Gesamt:
+        CHF {{ '%.2f'|format(order.total_cents / 100) }}
+    </h2>
+
+    <a
+        class="action-button"
+        href="{{ url_for('cart_view') }}"
+    >
+        Zum Warenkorb
+    </a>
+
+    <a
+        class="action-button action-button--secondary"
+        href="{{ url_for('shop') }}"
+    >
+        Zum Shop
+    </a>
+</section>
+{% endblock %}

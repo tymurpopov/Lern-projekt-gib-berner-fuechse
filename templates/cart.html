@@ -6,39 +6,25 @@
 <section>
     <h1>Warenkorb</h1>
 
-    {% set messages = get_flashed_messages(
-        with_categories=true,
-        category_filter=['cart_message', 'cart_success']
-    ) %}
-
-    {% if messages %}
     <div id="cart-notices" tabindex="-1">
-        {% for category, message in messages %}
-        <div
-            class="cart-notice {{ 'cart-notice--success'
-                if category == 'cart_success' else '' }}"
-            role="status"
-        >
-            {% if category == 'cart_success' %}
-            <h2>Testkauf abgeschlossen</h2>
-            {% endif %}
-
-            <p>{{ message }}</p>
-        </div>
+        {% for message in get_flashed_messages(
+            category_filter=['cart_message']
+        ) %}
+        <p role="status">{{ message }}</p>
         {% endfor %}
     </div>
-    {% endif %}
 
-    {% for item in items %}
-    {% set product = item.product %}
+    <div class="data-grid data-grid--wide">
+        {% for item in items %}
+        {% set product = item.product %}
+        {% set variant = item.variant %}
 
-    <article class="product-card cart-item">
-        <p>
+        <article class="product-card cart-item">
             <label>
                 <input
                     type="checkbox"
                     name="selected_products"
-                    value="{{ product.id }}"
+                    value="v:{{ variant.id }}"
                     form="checkout-form"
                     data-subtotal="{{ item.subtotal_cents }}"
                     {% if item.available %}
@@ -47,134 +33,135 @@
                     disabled
                     {% endif %}
                 >
-                Dieses Produkt kaufen
-            </label>
-        </p>
-
-        {% if product.image %}
-        <img
-            class="product-photo"
-            src="{{ url_for('static', filename=product.image) }}"
-            alt="Produktbild: {{ product.name }}"
-            loading="lazy"
-            width="180"
-            height="180"
-        >
-        {% endif %}
-
-        <h2>
-            <a href="{{ url_for(
-                'product_detail',
-                product_id=product.id
-            ) }}">
-                {{ product.name }}
-            </a>
-        </h2>
-
-        <p>
-            Einzelpreis:
-            CHF {{ "%.2f"|format(product.price_cents / 100) }}
-        </p>
-
-        <p>
-            Zwischensumme:
-            <strong>
-                CHF {{ "%.2f"|format(item.subtotal_cents / 100) }}
-            </strong>
-        </p>
-
-        {% if not item.available %}
-        <p role="alert">
-            Der Lagerbestand hat sich geändert.
-            Verfügbar: {{ product.quantity }} Stück.
-            Bitte die Anzahl reduzieren oder das Produkt entfernen.
-        </p>
-        {% endif %}
-
-        <form
-            class="cart-quantity-form"
-            method="post"
-            action="{{ url_for(
-                'cart_update',
-                product_id=product.id
-            ) }}"
-        >
-            <input
-                type="hidden"
-                name="csrf_token"
-                value="{{ csrf_token() }}"
-            >
-
-            <label for="cart-quantity-{{ product.id }}">
-                Anzahl
+                Diese Position kaufen
             </label>
 
-            <input
-                type="number"
-                id="cart-quantity-{{ product.id }}"
-                name="quantity"
-                value="{{ item.quantity }}"
-                min="0"
-                max="{{ [product.quantity, 10000]|min }}"
-                step="1"
-                required
+            {% if product.image %}
+            <img
+                class="product-photo"
+                src="{{ url_for('static', filename=product.image) }}"
+                alt="Produktbild: {{ product.name }}"
+                width="180"
+                height="180"
+                loading="lazy"
             >
+            {% endif %}
 
-            <button
-                class="action-button action-button--secondary"
-                type="submit"
+            <h2>
+                <a href="{{ url_for(
+                    'product_detail',
+                    product_id=product.id
+                ) }}">
+                    {{ product.name }}
+                </a>
+            </h2>
+
+            {% if variant.size %}
+            <p>
+                Grösse:
+                <strong>{{ variant.size }}</strong>
+            </p>
+            {% endif %}
+
+            <p>
+                Einzelpreis:
+                CHF {{ '%.2f'|format(product.price_cents / 100) }}
+            </p>
+
+            <p>
+                Zwischensumme:
+                CHF {{ '%.2f'|format(item.subtotal_cents / 100) }}
+            </p>
+
+            {% if not item.available %}
+            <p role="alert">
+                Bestand geändert.
+                Verfügbar: {{ variant.stock }}.
+                Bitte Anzahl reduzieren oder Position entfernen.
+            </p>
+            {% endif %}
+
+            <form
+                class="cart-quantity-form"
+                method="post"
+                action="{{ url_for(
+                    'cart_update',
+                    variant_id=variant.id
+                ) }}"
             >
-                Aktualisieren
-            </button>
-        </form>
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
 
-        <form
-            method="post"
-            action="{{ url_for(
-                'cart_remove',
-                product_id=product.id
-            ) }}"
-        >
-            <input
-                type="hidden"
-                name="csrf_token"
-                value="{{ csrf_token() }}"
+                <label for="quantity-{{ variant.id }}">
+                    Anzahl
+                </label>
+
+                <input
+                    type="number"
+                    id="quantity-{{ variant.id }}"
+                    name="quantity"
+                    value="{{ item.quantity }}"
+                    min="0"
+                    max="{{ [variant.stock, 10000]|min }}"
+                    step="1"
+                    required
+                >
+
+                <button
+                    class="action-button action-button--secondary"
+                    type="submit"
+                >
+                    Aktualisieren
+                </button>
+            </form>
+
+            <form
+                method="post"
+                action="{{ url_for(
+                    'cart_remove',
+                    variant_id=variant.id
+                ) }}"
             >
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                >
 
-            <button
-                class="action-button action-button--secondary"
-                type="submit"
-            >
-                Entfernen
-            </button>
-        </form>
-    </article>
+                <button
+                    class="action-button action-button--secondary"
+                    type="submit"
+                >
+                    Entfernen
+                </button>
+            </form>
+        </article>
 
-    {% else %}
-    <p>Dein Warenkorb ist leer.</p>
-    {% endfor %}
+        {% else %}
+        <p>Dein Warenkorb ist leer.</p>
+        {% endfor %}
+    </div>
 
     {% if items %}
     <h2>
-        Gesamter Warenkorb:
-        CHF {{ "%.2f"|format(total_cents / 100) }}
+        Gesamt:
+        CHF {{ '%.2f'|format(total_cents / 100) }}
     </h2>
 
     <section class="checkout-panel">
         <h2>Testkauf</h2>
 
         <p>
-            Wähle oben aus, welche Produkte du kaufen möchtest.
-            Nicht ausgewählte Produkte bleiben im Warenkorb.
+            Nur ausgewählte Positionen werden gekauft.
+            Der Warenkorb reserviert keine Bestände.
         </p>
 
         <p>
-            <strong>Ausgewählte Produkte:</strong>
+            Ausgewählt:
             <span id="selected-total" aria-live="polite">—</span>
-        </p>
-
-        <p>
-            Es gelten die aktuellen Preise und Lagerbestände.
         </p>
 
         <form
@@ -203,7 +190,7 @@
                         required
                     >
                     Ich verstehe: Dies ist nur ein Testkauf.
-                    Es wird kein echtes Geld bezahlt.
+                    Kein echtes Geld wird bezahlt.
                 </label>
             </p>
 
@@ -217,18 +204,19 @@
         </form>
     </section>
 
-    <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+    <script src="{{ url_for(
+        'static',
+        filename='js/cart.js'
+    ) }}"></script>
     {% endif %}
 
     <p>
-        Schulprojekt: Keine echten Zahlungen.
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('shop') }}"
+        >
+            Weiter einkaufen
+        </a>
     </p>
-
-    <a
-        class="action-button action-button--secondary"
-        href="{{ url_for('shop') }}"
-    >
-        Weiter einkaufen
-    </a>
 </section>
 {% endblock %}

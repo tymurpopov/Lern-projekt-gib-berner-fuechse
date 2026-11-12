@@ -1,4 +1,14 @@
-{% if product.quantity > 0 %}
+{% set variants = product.variants %}
+{% set sized = variants|rejectattr('size', 'equalto', '')|list %}
+{% set available = variants|selectattr('stock', 'gt', 0)|list %}
+
+{% if not inventory_ready(product) %}
+<p>
+    Die Bestände müssen zuerst im Admin geprüft
+    und gespeichert werden.
+</p>
+
+{% elif available %}
 <form
     class="cart-quantity-form"
     method="post"
@@ -10,6 +20,41 @@
         value="{{ csrf_token() }}"
     >
 
+    {% if sized %}
+    <label for="size-{{ product.id }}">Grösse</label>
+
+    <select
+        id="size-{{ product.id }}"
+        name="variant_id"
+        required
+    >
+        <option value="" selected disabled>
+            Bitte auswählen
+        </option>
+
+        {% for variant in sized %}
+        <option
+            value="{{ variant.id }}"
+            {% if variant.stock == 0 %}disabled{% endif %}
+        >
+            {{ variant.size }} —
+            {% if variant.stock > 0 %}
+                {{ variant.stock }} verfügbar
+            {% else %}
+                ausverkauft
+            {% endif %}
+        </option>
+        {% endfor %}
+    </select>
+
+    {% else %}
+    <input
+        type="hidden"
+        name="variant_id"
+        value="{{ variants[0].id }}"
+    >
+    {% endif %}
+
     <label for="quantity-{{ product.id }}">Anzahl</label>
 
     <input
@@ -18,7 +63,7 @@
         name="quantity"
         value="1"
         min="1"
-        max="{{ [product.quantity, 10000]|min }}"
+        max="{{ 10000 if sized else [variants[0].stock, 10000]|min }}"
         step="1"
         required
     >
@@ -27,6 +72,10 @@
         In den Warenkorb
     </button>
 </form>
-{% else %}
+
+{% elif variants %}
 <p><strong>Ausverkauft</strong></p>
+
+{% else %}
+<p>Der Bestand wurde noch nicht für den Verkauf freigegeben.</p>
 {% endif %}

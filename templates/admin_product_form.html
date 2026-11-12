@@ -70,8 +70,47 @@
             >
         </div>
 
+                <div>
+            <label for="variant-mode">Grössenmodus</label>
+
+            <select id="variant-mode" name="variant_mode" required>
+                {% if product and not product.variants and product.sizes %}
+                <option
+                    value="legacy"
+                    {% if variant_mode == 'legacy' %}selected{% endif %}
+                >
+                    Bisherigen Gesamtbestand behalten
+                </option>
+                {% endif %}
+
+                <option
+                    value="none"
+                    {% if variant_mode == 'none' %}selected{% endif %}
+                >
+                    Ohne Grössen
+                </option>
+
+                <option
+                    value="sizes"
+                    {% if variant_mode == 'sizes' %}selected{% endif %}
+                >
+                    Mit Grössen
+                </option>
+            </select>
+
+            {% if product %}
+            <p>
+                Bisheriger Gesamtbestand: {{ product.quantity }};
+                Grössen: {{ product.sizes or '—' }}.
+            </p>
+            {% endif %}
+        </div>
+
         <div>
-            <label for="quantity">Anzahl auf Lager</label>
+            <label for="quantity">
+                Bestand nur für „Ohne Grössen“
+            </label>
+
             <input
                 type="number"
                 id="quantity"
@@ -83,8 +122,48 @@
                 min="0"
                 max="10000"
                 step="1"
-                required
             >
+        </div>
+
+        <div>
+            <label for="variant-text">
+                Bestände nur für „Mit Grössen“
+            </label>
+
+            <textarea
+                id="variant-text"
+                name="variant_text"
+                rows="6"
+                maxlength="4000"
+                placeholder="S=8&#10;M=12&#10;L=0"
+                aria-describedby="variant-help"
+            >{{ variant_text }}</textarea>
+
+            <p id="variant-help">
+                Eine Grösse pro Zeile, zum Beispiel S=8.
+                Gesamtbestand wird berechnet.
+                0 bedeutet ausverkauft.
+                Zum Entfernen einer Grösse ihre Zeile löschen.
+                Alte Bestände nicht automatisch verteilt:
+                bitte selbst eintragen.
+            </p>
+        </div>
+
+        <div>
+            {% set active = (request.form.get('active') == '1')
+                if request.method == 'POST'
+                else (product.active if product else true) %}
+
+            <label for="active">
+                <input
+                    id="active"
+                    type="checkbox"
+                    name="active"
+                    value="1"
+                    {% if active %}checked{% endif %}
+                >
+                Im Shop sichtbar
+            </label>
         </div>
 
         <div>

@@ -45,6 +45,14 @@ from contextlib import closing
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 import json
+from shop_cart import (
+    read_cart,
+    register_shop_cart,
+    product_variant_form,
+    read_variant_form,
+    save_product_variants,
+)
+
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
@@ -1471,11 +1479,12 @@ def save_shop_photo(upload):
     return f"img/shop/{filename}"
 
 
-def read_product_form():
+def read_product_form(product=None):
     name = request.form.get("name", "").strip()
     description = request.form.get("description", "").strip()
-    price = request.form.get("price", "").strip().replace(",", ".")
-    quantity = request.form.get("quantity", "").strip()
+    price = request.form.get(
+        "price", ""
+    ).strip().replace(",", ".")
 
     if not name or len(name) > 150:
         raise ValueError(
@@ -1485,18 +1494,15 @@ def read_product_form():
     if len(description) > 10000:
         raise ValueError("Die Beschreibung ist zu lang.")
 
-    if not re.fullmatch(r"[0-9]{1,5}(?:\.[0-9]{1,2})?", price):
+    if not re.fullmatch(
+        r"[0-9]{1,5}(?:\.[0-9]{1,2})?",
+        price,
+    ):
         raise ValueError(
             "Bitte einen Preis von 0 bis 99999.99 CHF eingeben."
         )
 
-    if (
-        not re.fullmatch(r"[0-9]{1,5}", quantity)
-        or int(quantity) > 10000
-    ):
-        raise ValueError(
-            "Der Lagerbestand muss zwischen 0 und 10000 liegen."
-        )
+    quantity, sizes, variants = read_variant_form(product)
 
     francs, _, cents = price.partition(".")
     price_cents = int(francs) * 100 + int(cents.ljust(2, "0"))
@@ -1505,9 +1511,11 @@ def read_product_form():
         "name": name,
         "description": description,
         "price_cents": price_cents,
-        "quantity": int(quantity),
+        "quantity": quantity,
+        "sizes": sizes,
+        "active": request.form.get("active") == "1",
+        "_variants": variants,
     }
-
 
 @app.route("/admin/shop")
 @admin_required
@@ -1533,9 +1541,12 @@ def admin_product_create():
 
         try:
             values = read_product_form()
+            variants = values.pop("_variants")
             photo_path = save_shop_photo(request.files.get("photo"))
 
-            db.session.add(Product(**values, image=photo_path))
+            product = Product(**values, image=photo_path)
+            db.session.add(product)
+            save_product_variants(product, variants)
             db.session.commit()
 
         except ValueError as exc:
@@ -1575,7 +1586,8 @@ def admin_product_create():
     return render_template(
         "admin_product_form.html",
         product=None,
-        error=error
+        error=error,
+        **product_variant_form()
     )
 
 def remove_shop_photo(image_path):
@@ -1618,11 +1630,14 @@ def admin_product_edit(product_id):
         check_csrf()
 
         try:
-            values = read_product_form()
+            values = read_product_form(product)
+            variants = values.pop("_variants")
             photo_path = save_shop_photo(request.files.get("photo"))
 
             for field, value in values.items():
                 setattr(product, field, value)
+
+            save_product_variants(product, variants)
 
             if photo_path:
                 product.image = photo_path
@@ -1661,7 +1676,8 @@ def admin_product_edit(product_id):
     return render_template(
         "admin_product_form.html",
         product=product,
-        error=error
+        error=error,
+        **product_variant_form(product)
     )
 
 
@@ -1891,417 +1907,6 @@ def shop():
         "shop.html",
         products=products,
         sort=sort
-    )
-
-def read_cart():
-    raw = session.get("cart", {})
-
-    if not isinstance(raw, dict):
-        return {}
-
-    cart = {}
-
-    for key, quantity in list(raw.items())[:50]:
-        if (
-            isinstance(key, str)
-            and re.fullmatch(r"[1-9][0-9]{0,11}", key)
-            and type(quantity) is int
-            and 1 <= quantity <= 10000
-        ):
-            cart[key] = quantity
-
-    return cart
-
-
-def read_cart_quantity(allow_zero=False):
-    value = request.form.get("quantity", "").strip()
-    minimum = 0 if allow_zero else 1
-
-    if not re.fullmatch(r"[0-9]{1,5}", value):
-        raise ValueError(
-            "Bitte eine gültige ganze Anzahl eingeben."
-        )
-
-    quantity = int(value)
-
-    if not minimum <= quantity <= 10000:
-        raise ValueError(
-            f"Bitte eine Anzahl von {minimum} bis 10000 eingeben."
-        )
-
-    return quantity
-
-
-@app.context_processor
-def cart_helpers():
-    return {
-        "cart_count": sum(read_cart().values())
-    }
-
-
-@app.route("/shop/<int:product_id>")
-def product_detail(product_id):
-    product = db.get_or_404(Product, product_id)
-
-    if not product.active:
-        abort(404)
-
-    return render_template(
-        "product.html",
-        product=product
-    )
-
-
-@app.route(
-    "/cart/add/<int:product_id>",
-    methods=["POST"]
-)
-def cart_add(product_id):
-    check_csrf()
-
-    product = db.get_or_404(Product, product_id)
-
-    if not product.active:
-        abort(404)
-
-    cart = read_cart()
-    key = str(product.id)
-
-    try:
-        quantity = read_cart_quantity()
-
-        if key not in cart and len(cart) >= 50:
-            raise ValueError(
-                "Die maximale Anzahl verschiedener Produkte ist erreicht."
-            )
-
-        new_quantity = cart.get(key, 0) + quantity
-
-        if (
-            new_quantity > product.quantity
-            or new_quantity > 10000
-        ):
-            raise ValueError(
-                "Diese Anzahl ist nicht verfügbar."
-            )
-
-    except ValueError as exc:
-        flash(str(exc), "cart_message")
-
-        return redirect(
-            url_for("product_detail", product_id=product.id)
-        )
-
-    cart[key] = new_quantity
-    session["cart"] = cart
-
-    flash(
-        "Das Produkt wurde zum Warenkorb hinzugefügt.",
-        "cart_message"
-    )
-
-    return redirect(url_for("cart_view"))
-
-
-@app.route("/cart")
-def cart_view():
-    cart = read_cart()
-    products = []
-
-    if cart:
-        products = db.session.execute(
-            db.select(Product)
-            .where(
-                Product.id.in_([int(key) for key in cart]),
-                Product.active.is_(True)
-            )
-            .order_by(Product.name)
-        ).scalars().all()
-
-    items = []
-    kept = {}
-    total_cents = 0
-
-    for product in products:
-        quantity = cart[str(product.id)]
-        subtotal = product.price_cents * quantity
-
-        kept[str(product.id)] = quantity
-
-        items.append({
-            "product": product,
-            "quantity": quantity,
-            "subtotal_cents": subtotal,
-            "available": quantity <= product.quantity,
-        })
-
-        total_cents += subtotal
-
-    if kept != cart:
-        session["cart"] = kept
-
-        flash(
-            "Nicht mehr verfügbare Produkte wurden "
-            "aus dem Warenkorb entfernt.",
-            "cart_message"
-        )
-
-    checkout_token = session.get("checkout_token")
-
-    if (
-        not isinstance(checkout_token, str)
-        or not re.fullmatch(r"[a-f0-9]{32}", checkout_token)
-    ):
-        checkout_token = secrets.token_hex(16)
-        session["checkout_token"] = checkout_token
-
-    return render_template(
-        "cart.html",
-        items=items,
-        total_cents=total_cents,
-        checkout_token=checkout_token
-    )
-
-
-@app.route(
-    "/cart/update/<int:product_id>",
-    methods=["POST"]
-)
-def cart_update(product_id):
-    check_csrf()
-
-    cart = read_cart()
-    key = str(product_id)
-
-    if key not in cart:
-        return redirect(url_for("cart_view"))
-
-    try:
-        quantity = read_cart_quantity(allow_zero=True)
-
-        if quantity == 0:
-            cart.pop(key, None)
-
-        else:
-            product = db.get_or_404(Product, product_id)
-
-            if not product.active:
-                abort(404)
-
-            if quantity > product.quantity:
-                raise ValueError(
-                    "Für diese Anzahl reicht der Lagerbestand nicht aus."
-                )
-
-            cart[key] = quantity
-
-    except ValueError as exc:
-        flash(str(exc), "cart_message")
-
-    else:
-        session["cart"] = cart
-
-        flash(
-            "Der Warenkorb wurde aktualisiert.",
-            "cart_message"
-        )
-
-    return redirect(url_for("cart_view"))
-
-
-@app.route(
-    "/cart/remove/<int:product_id>",
-    methods=["POST"]
-)
-def cart_remove(product_id):
-    check_csrf()
-
-    cart = read_cart()
-    cart.pop(str(product_id), None)
-
-    session["cart"] = cart
-
-    flash(
-        "Das Produkt wurde aus dem Warenkorb entfernt.",
-        "cart_message"
-    )
-
-    return redirect(url_for("cart_view"))
-
-@app.route("/cart/checkout", methods=["POST"])
-def cart_checkout():
-    check_csrf()
-
-    token = request.form.get("checkout_token", "")
-    expected = session.get("checkout_token", "")
-
-    if (
-        not re.fullmatch(r"[a-f0-9]{32}", token)
-        or not isinstance(expected, str)
-        or not hmac.compare_digest(token, expected)
-    ):
-        flash(
-            "Die Bestellung wurde bereits verarbeitet oder "
-            "die Seite ist abgelaufen. Bitte den Warenkorb neu laden.",
-            "cart_message"
-        )
-        return redirect(url_for("cart_view"))
-
-    order = db.session.execute(
-        db.select(DemoOrder).where(DemoOrder.token == token)
-    ).scalar_one_or_none()
-
-    if order is None:
-        cart = read_cart()
-
-        selected = list(dict.fromkeys(
-            request.form.getlist("selected_products")
-        ))
-
-        if (
-            not selected
-            or len(selected) > 50
-            or any(key not in cart for key in selected)
-        ):
-            flash(
-                "Bitte mindestens ein gültiges Produkt auswählen.",
-                "cart_message"
-            )
-            return redirect(url_for("cart_view"))
-
-        if request.form.get("confirm_demo") != "yes":
-            flash(
-                "Bitte bestätigen, dass dies nur ein Testkauf ist.",
-                "cart_message"
-            )
-            return redirect(url_for("cart_view"))
-
-        try:
-            order = DemoOrder(token=token)
-            db.session.add(order)
-            db.session.flush()
-
-            products = db.session.execute(
-                db.select(Product)
-                .where(
-                    Product.id.in_([int(key) for key in selected]),
-                    Product.active.is_(True)
-                )
-                .order_by(Product.id)
-            ).scalars().all()
-
-            if len(products) != len(selected):
-                raise ValueError(
-                    "Ein ausgewähltes Produkt ist nicht mehr verfügbar."
-                )
-
-            records = []
-            total_cents = 0
-
-            for product in products:
-                quantity = cart[str(product.id)]
-                price_cents = product.price_cents
-                name = product.name
-
-                result = db.session.execute(
-                    db.update(Product)
-                    .where(
-                        Product.id == product.id,
-                        Product.active.is_(True),
-                        Product.quantity >= quantity,
-                        Product.price_cents == price_cents
-                    )
-                    .values(
-                        quantity=Product.quantity - quantity
-                    )
-                    .execution_options(synchronize_session=False)
-                )
-
-                if result.rowcount != 1:
-                    raise ValueError(
-                        "Bestand oder Preis hat sich geändert. "
-                        "Bitte den Warenkorb neu laden."
-                    )
-
-                records.append({
-                    "product_id": product.id,
-                    "name": name,
-                    "quantity": quantity,
-                    "price_cents": price_cents,
-                })
-
-                total_cents += price_cents * quantity
-
-            order.total_cents = total_cents
-            order.items_json = json.dumps(
-                records,
-                ensure_ascii=False
-            )
-
-            db.session.commit()
-
-        except ValueError as exc:
-            db.session.rollback()
-            flash(str(exc), "cart_message")
-            return redirect(url_for("cart_view"))
-
-        except IntegrityError:
-            db.session.rollback()
-
-            order = db.session.execute(
-                db.select(DemoOrder).where(DemoOrder.token == token)
-            ).scalar_one_or_none()
-
-            if order is None:
-                app.logger.exception(
-                    "Testbestellung konnte nicht gespeichert werden."
-                )
-                flash(
-                    "Der Testkauf konnte nicht abgeschlossen werden.",
-                    "cart_message"
-                )
-                return redirect(url_for("cart_view"))
-
-        except SQLAlchemyError:
-            db.session.rollback()
-
-            app.logger.exception(
-                "Testbestellung fehlgeschlagen."
-            )
-
-            flash(
-                "Der Testkauf konnte nicht abgeschlossen werden. "
-                "Bitte erneut versuchen.",
-                "cart_message"
-            )
-            return redirect(url_for("cart_view"))
-
-    cart = read_cart()
-
-    for record in json.loads(order.items_json):
-        key = str(record["product_id"])
-        remaining = max(
-            0,
-            cart.get(key, 0) - record["quantity"]
-        )
-
-        if remaining:
-            cart[key] = remaining
-        else:
-            cart.pop(key, None)
-
-    session["cart"] = cart
-    session.pop("checkout_token", None)
-
-    flash(
-        f"Testbestellung Nr. {order.id}: "
-        f"CHF {order.total_cents / 100:.2f} abgeschlossen. "
-        "Keine echte Zahlung.",
-        "cart_success"
-    )
-
-    return redirect(
-        url_for("cart_view", _anchor="cart-notices")
     )
 
 @app.route("/rules")
@@ -2918,9 +2523,7 @@ def add_product_created_at():
 
     click.echo("Die Spalte products.created_at wurde hinzugefügt.")
 
-from checkout import register_checkout
-
-register_checkout(app, read_cart, check_csrf)
+register_shop_cart(app, check_csrf)
 
 if __name__ == "__main__":
     app.run(debug=True)
