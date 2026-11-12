@@ -1,58 +1,50 @@
-from flask import Flask, render_template
-from models import (
-    db,
-    Event,
-    Team,
-    Admin,
-    TeamApplication,
-    MemberApplication,
-    Member,
-    Product,
-    DemoOrder,
-)
-from werkzeug.security import generate_password_hash, check_password_hash
 import click
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    session,
-    abort,
-    flash,
-    send_from_directory,
-)
-import os
-import secrets
 import hmac
-from datetime import timedelta, date, time, timezone
-from functools import wraps
+import os
 import re
-from urllib.parse import urlsplit
-from sqlalchemy.exc import IntegrityError
-import sqlite3
-from pathlib import Path
-from contextlib import closing
-from sqlalchemy import inspect, text
-import warnings
-from io import BytesIO
-from PIL import Image, ImageOps, UnidentifiedImageError
+import secrets
 import shutil
 import sqlite3
-from pathlib import Path
+import warnings
+
 from contextlib import closing
+from datetime import date, time, timedelta
+from functools import wraps
+from io import BytesIO
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from flask import (
+    Flask,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    session,
+    url_for,
+)
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-import json
+
+from models import (
+    db,
+    Admin,
+    Event,
+    Member,
+    MemberApplication,
+    Product,
+    Team,
+    TeamApplication,
+)
 from shop_cart import (
-    read_cart,
-    register_shop_cart,
     product_variant_form,
     read_variant_form,
+    register_shop_cart,
     save_product_variants,
 )
-from sqlalchemy.exc import SQLAlchemyError
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
@@ -762,39 +754,6 @@ def delete_member_photo_files(filename):
     (public_member_photo_folder() / filename).unlink(missing_ok=True)
     (member_photo_folder() / filename).unlink(missing_ok=True)
 
-
-def read_member_edit_form():
-    values = {
-        "nickname": request.form.get("nickname", "").strip(),
-        "game": request.form.get("game", "").strip(),
-        "role": request.form.get("role", "").strip(),
-        "external_profile": request.form.get("external_profile", "").strip(),
-    }
-
-    limits = {
-        "nickname": 80,
-        "game": 100,
-        "role": 100,
-        "external_profile": 500,
-    }
-
-    if not values["nickname"] or not values["game"]:
-        raise ValueError("Nickname und Spiel sind Pflichtfelder.")
-
-    for key, limit in limits.items():
-        if len(values[key]) > limit:
-            raise ValueError("Ein Feld ist zu lang.")
-
-    if values["external_profile"]:
-        parts = urlsplit(values["external_profile"])
-
-        if parts.scheme not in ("http", "https") or not parts.netloc:
-            raise ValueError("Der externe Profil-Link ist ungültig.")
-
-    values["publish_profile"] = request.form.get("publish_profile") == "1"
-
-    return values
-
 @app.route("/admin/members/<int:member_id>/delete", methods=["POST"])
 @admin_required
 def admin_member_delete(member_id):
@@ -816,15 +775,6 @@ def admin_member_delete(member_id):
     )
 
     return redirect(url_for("admin_member_applications"))
-
-
-def delete_member_photo_files(filename):
-    if not filename or not re.fullmatch(r"[a-f0-9]{32}\.png", filename):
-        return
-
-    (public_member_photo_folder() / filename).unlink(missing_ok=True)
-    (member_photo_folder() / filename).unlink(missing_ok=True)
-
 
 def unpublish_member_photo(filename):
     if filename and re.fullmatch(r"[a-f0-9]{32}\.png", filename):
@@ -1255,14 +1205,12 @@ def admin_team_delete(team_id):
     selected_team = db.get_or_404(Team, team_id)
 
     try:
-        # Сохраняем заявку, убираем ссылку на удаляемую команду.
         db.session.execute(
             db.update(TeamApplication)
             .where(TeamApplication.team_id == team_id)
             .values(team_id=None)
         )
 
-        # Убираем связь с командой, но не удаляем участников.
         selected_team.members.clear()
 
         db.session.delete(selected_team)
@@ -1674,49 +1622,6 @@ def admin_product_delete(product_id):
 def init_db():
     db.create_all()
     print("Datenbank bereit: instance/berner_fuechse.db")
-
-@app.cli.command("add-member-photo")
-def add_member_photo():
-    inspector = inspect(db.engine)
-
-    if not inspector.has_table("member_applications"):
-        raise click.ClickException(
-            "Die Tabelle member_applications fehlt. "
-            "Führe zuerst init-db aus."
-        )
-
-    columns = {
-        column["name"]
-        for column in inspector.get_columns("member_applications")
-    }
-
-    if "photo_filename" in columns:
-        click.echo("Die Fotospalte ist bereits vorhanden.")
-        return
-
-    database_path = Path(db.engine.url.database)
-
-    backup_folder = Path(app.instance_path) / "backups"
-    backup_folder.mkdir(parents=True, exist_ok=True)
-
-    backup_path = backup_folder / (
-        f"before_member_photo_{secrets.token_hex(8)}.db"
-    )
-
-    with closing(sqlite3.connect(str(database_path))) as source:
-        with closing(sqlite3.connect(str(backup_path))) as destination:
-            source.backup(destination)
-
-    with db.engine.begin() as connection:
-        connection.execute(
-            text(
-                "ALTER TABLE member_applications "
-                "ADD COLUMN photo_filename VARCHAR(255)"
-            )
-        )
-
-    click.echo(f"Backup erstellt: {backup_path}")
-    click.echo("Fotospalte erfolgreich hinzugefügt.")
 
 @app.cli.command("create-admin")
 @click.option("--username", prompt="Benutzername")

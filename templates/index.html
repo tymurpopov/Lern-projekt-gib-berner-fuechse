@@ -1,9 +1,97 @@
+
 {% extends "base.html" %}
 
-{% block title %}
-index
-{% endblock %}
+{% block title %}Berner Füchse – Home{% endblock %}
 
 {% block content %}
-<h1>Startseite</h1>
+
+<section class="home-hero">
+    <div class="home-hero-content">
+        <p class="home-eyebrow">E-SPORT AUS BERN</p>
+
+        <h1>Willkommen bei den <span>Berner Füchsen!</span></h1>
+
+        <p class="home-hero-description">
+            Gemeinsam spielen. Gemeinsam wachsen.
+            Gemeinsam Erfolge feiern.
+        </p>
+
+        <div class="action-group">
+            <a href="{{ url_for('teams') }}" class="action-button">
+                Unsere Teams
+            </a>
+
+            <a href="{{ url_for('join') }}" class="action-button action-button--secondary">
+                Mitglied werden
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="home-intro">
+    <h2>Mehr als nur Gaming</h2>
+
+    <p>
+        Die Berner Füchse stehen für Teamgeist, Fairplay und die
+        gemeinsame Leidenschaft für E-Sport. Bei uns geht es nicht
+        nur ums Gewinnen, sondern auch um Zusammenarbeit,
+        persönliche Entwicklung und eine starke Gemeinschaft.
+    </p>
+</section>
+
+<section class="home-features">
+    <h2>Entdecke unseren Verein</h2>
+
+    <div class="data-grid">
+
+        <article class="home-card">
+            <h3>Unsere Teams</h3>
+            <p>
+                Lerne unsere Teams kennen und entdecke,
+                wer gemeinsam für die Berner Füchse spielt.
+            </p>
+            <a href="{{ url_for('teams') }}" class="action-button">
+                Teams ansehen
+            </a>
+        </article>
+
+        <article class="home-card">
+            <h3>Events und Turniere</h3>
+            <p>
+                Entdecke unsere Veranstaltungen und
+                erfahre mehr über kommende Aktivitäten.
+            </p>
+            <a href="{{ url_for('events') }}" class="action-button">
+                Events ansehen
+            </a>
+        </article>
+
+        <article class="home-card">
+            <h3>Unser Verein</h3>
+            <p>
+                Erfahre mehr über unsere Mitgliedschaft,
+                unsere Werte und die Regeln des Vereins.
+            </p>
+            <a href="{{ url_for('membership') }}" class="action-button">
+                Mehr erfahren
+            </a>
+        </article>
+
+    </div>
+</section>
+
+<section class="home-join">
+    <h2>Werde Teil der Berner Füchse!</h2>
+
+    <p>
+        Du interessierst dich für E-Sport und möchtest
+        Teil unserer Gemeinschaft werden?
+        Dann freuen wir uns auf deine Bewerbung!
+    </p>
+
+    <a href="{{ url_for('join') }}" class="action-button">
+        Jetzt bewerben
+    </a>
+</section>
+
 {% endblock %}
