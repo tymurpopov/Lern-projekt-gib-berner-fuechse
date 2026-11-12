@@ -52,7 +52,7 @@ from shop_cart import (
     read_variant_form,
     save_product_variants,
 )
-
+from sqlalchemy.exc import SQLAlchemyError
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
@@ -795,71 +795,6 @@ def read_member_edit_form():
 
     return values
 
-
-@app.route("/admin/members/<int:member_id>/edit", methods=["POST"])
-@admin_required
-def admin_member_edit_save(member_id):
-    check_csrf()
-
-    member = db.get_or_404(Member, member_id)
-    application = member.application
-
-    try:
-        values = read_member_edit_form()
-    except ValueError as exc:
-        flash(str(exc), "member_application_admin")
-
-        return redirect(url_for("admin_member_edit", member_id=member_id))
-
-    application.nickname = values["nickname"]
-    application.game = values["game"]
-    application.role = values["role"]
-    application.external_profile = values["external_profile"]
-    application.publish_profile = values["publish_profile"]
-    member.nickname_key = values["nickname"].casefold()
-
-    try:
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()
-
-        flash(
-            "Dieser Nickname ist bereits vergeben.",
-            "member_application_admin"
-        )
-
-        return redirect(url_for("admin_member_edit", member_id=member_id))
-
-    if application.publish_profile:
-        try:
-            publish_member_photo(application)
-        except (OSError, ValueError):
-            app.logger.exception(
-                "Fotoveröffentlichung fehlgeschlagen: Mitglied %s",
-                member_id
-            )
-
-            flash(
-                "Das Mitglied wurde gespeichert, aber das Foto "
-                "konnte nicht veröffentlicht werden.",
-                "member_application_admin"
-            )
-
-            return redirect(url_for("admin_member_applications"))
-    else:
-        filename = application.photo_filename
-
-        if filename and re.fullmatch(r"[a-f0-9]{32}\.png", filename):
-            (public_member_photo_folder() / filename).unlink(missing_ok=True)
-
-    flash(
-        "Das Mitglied wurde gespeichert.",
-        "member_application_admin"
-    )
-
-    return redirect(url_for("admin_member_applications"))
-
-
 @app.route("/admin/members/<int:member_id>/delete", methods=["POST"])
 @admin_required
 def admin_member_delete(member_id):
@@ -1319,8 +1254,25 @@ def admin_team_delete(team_id):
 
     selected_team = db.get_or_404(Team, team_id)
 
-    db.session.delete(selected_team)
-    db.session.commit()
+    try:
+        # Сохраняем заявку, убираем ссылку на удаляемую команду.
+        db.session.execute(
+            db.update(TeamApplication)
+            .where(TeamApplication.team_id == team_id)
+            .values(team_id=None)
+        )
+
+        # Убираем связь с командой, но не удаляем участников.
+        selected_team.members.clear()
+
+        db.session.delete(selected_team)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        app.logger.exception(
+            "Team konnte nicht gelöscht werden: %s", team_id
+        )
+        abort(500)
 
     return redirect(url_for("admin_teams"))
 
