@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Bestellungen verwalten{% endblock %}
+
+{% block content %}
+<section>
+    <h1>Bestellungen verwalten</h1>
+    <p>Alle Einträge sind Testbestellungen, keine echten Zahlungen.</p>
+
+    <form
+        class="shop-form"
+        method="get"
+        action="{{ url_for('admin_orders') }}"
+    >
+        <div>
+            <label for="order-source">Quelle</label>
+            <select id="order-source" name="source">
+                <option value="">Alle Quellen</option>
+                {% for key, value in sources.items() %}
+                <option
+                    value="{{ key }}"
+                    {% if source == key %}selected{% endif %}
+                >
+                    {{ value[0] }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="order-scope">Einträge</label>
+            <select id="order-scope" name="scope">
+                <option
+                    value="paid"
+                    {% if scope == 'paid' %}selected{% endif %}
+                >
+                    Nur abgeschlossene Testkäufe
+                </option>
+                <option
+                    value="all"
+                    {% if scope == 'all' %}selected{% endif %}
+                >
+                    Auch nicht abgeschlossene Vorschauen
+                </option>
+            </select>
+        </div>
+
+        <div>
+            <label for="order-state">Bearbeitungsstatus</label>
+            <select id="order-state" name="state">
+                <option value="">Alle Status</option>
+                {% for key, label in states.items() %}
+                <option
+                    value="{{ key }}"
+                    {% if state == key %}selected{% endif %}
+                >
+                    {{ label }}
+                </option>
+                {% endfor %}
+                <option
+                    value="draft"
+                    {% if state == 'draft' %}selected{% endif %}
+                >
+                    Vorschau – nicht gekauft
+                </option>
+            </select>
+        </div>
+
+        <button class="action-button" type="submit">
+            Filtern
+        </button>
+    </form>
+
+    <p>
+        {{ count }} Einträge.
+        Seite {{ page }} von {{ pages }}.
+    </p>
+
+    <div class="data-grid">
+        {% for order in orders %}
+        <article>
+            <h2>
+                {{ sources[order.source][0] }}
+                Nr. {{ order.id }}
+            </h2>
+
+            <p>
+                Datum (UTC):
+                {{ order.created_at.strftime('%d.%m.%Y %H:%M')
+                    if order.created_at else 'Nicht gespeichert' }}
+            </p>
+
+            <p>
+                Gesamt:
+                CHF {{ '%.2f'|format(order.total_cents / 100) }}
+            </p>
+
+            <p>
+                Testkauf:
+                {{ 'Abgeschlossen' if order.complete
+                    else 'Nicht abgeschlossen' }}
+            </p>
+
+            <p>
+                Bearbeitung:
+                {{ states[order.handling] if order.complete
+                    else 'Vorschau' }}
+            </p>
+
+            <a
+                class="action-button action-button--secondary"
+                href="{{ url_for(
+                    'admin_order_detail',
+                    source=order.source,
+                    order_id=order.id
+                ) }}"
+            >
+                Details ansehen
+            </a>
+        </article>
+
+        {% else %}
+        <p>Keine passenden Bestellungen gefunden.</p>
+        {% endfor %}
+    </div>
+
+    <nav class="action-group" aria-label="Bestellseiten">
+        {% if page > 1 %}
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for(
+                'admin_orders',
+                source=source,
+                scope=scope,
+                state=state,
+                page=page-1
+            ) }}"
+        >
+            Zurück
+        </a>
+        {% endif %}
+
+        {% if page < pages %}
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for(
+                'admin_orders',
+                source=source,
+                scope=scope,
+                state=state,
+                page=page+1
+            ) }}"
+        >
+            Weiter
+        </a>
+        {% endif %}
+    </nav>
+
+    <p>
+        <a href="{{ url_for('admin_dashboard') }}">
+            Zum Admin-Bereich
+        </a>
+    </p>
+</section>
+{% endblock %}

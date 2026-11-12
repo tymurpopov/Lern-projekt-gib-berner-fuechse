@@ -2525,5 +2525,8 @@ def add_product_created_at():
 
 register_shop_cart(app, check_csrf)
 
+from admin_orders import register_admin_orders
+register_admin_orders(app, admin_required, check_csrf)
+
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Bestellung {{ order.id }}{% endblock %}
+
+{% block content %}
+<section>
+    <h1>{{ source_label }} Nr. {{ order.id }}</h1>
+
+    {% for message in get_flashed_messages(
+        category_filter=['order_admin']
+    ) %}
+    <p role="status">{{ message }}</p>
+    {% endfor %}
+
+    <p>
+        Datum (UTC):
+        {{ order.created_at.strftime('%d.%m.%Y %H:%M')
+            if order.created_at else 'Nicht gespeichert' }}
+    </p>
+
+    <p>
+        Testkauf:
+        {{ 'Abgeschlossen' if complete
+            else 'Vorschau – nicht gekauft' }}.
+        Keine echte Zahlung.
+    </p>
+
+    {% if snapshot_error %}
+    <p role="alert">
+        Ein Teil der gespeicherten Positionen konnte
+        nicht gelesen werden.
+        Die Originaldaten wurden nicht verändert.
+    </p>
+    {% endif %}
+
+    <div class="data-grid">
+        {% for item in items %}
+        <article>
+            <h2>{{ item.name }}</h2>
+
+            <p>
+                Grösse:
+                {% if item.size is none %}
+                    Damals nicht gespeichert
+                {% elif item.size %}
+                    {{ item.size }}
+                {% else %}
+                    Ohne Grösse
+                {% endif %}
+            </p>
+
+            <p>Anzahl: {{ item.quantity }}</p>
+
+            <p>
+                Einzelpreis:
+                CHF {{ '%.2f'|format(item.price_cents / 100) }}
+            </p>
+
+            <p>
+                Summe:
+                CHF {{ '%.2f'|format(
+                    item.quantity * item.price_cents / 100
+                ) }}
+            </p>
+        </article>
+
+        {% else %}
+        <p>Keine lesbaren Positionen gespeichert.</p>
+        {% endfor %}
+    </div>
+
+    <h2>
+        Gespeicherter Gesamtbetrag:
+        CHF {{ '%.2f'|format(order.total_cents / 100) }}
+    </h2>
+
+    {% if complete %}
+    <form
+        class="shop-form"
+        method="post"
+        action="{{ url_for(
+            'admin_order_status',
+            source=source,
+            order_id=order.id
+        ) }}"
+    >
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+        >
+
+        <div>
+            <label for="handling-state">
+                Bearbeitungsstatus
+            </label>
+
+            <select id="handling-state" name="state" required>
+                {% for key, label in states.items() %}
+                <option
+                    value="{{ key }}"
+                    {% if state == key %}selected{% endif %}
+                >
+                    {{ label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <p>
+            Diese Änderung verändert keine Bestände
+            und keine Zahlung.
+        </p>
+
+        <button class="action-button" type="submit">
+            Status speichern
+        </button>
+    </form>
+
+    {% if handling %}
+    <p>
+        Zuletzt geändert (UTC):
+        {{ handling.updated_at.strftime('%d.%m.%Y %H:%M') }}
+    </p>
+    {% endif %}
+
+    {% else %}
+    <p>
+        Eine Vorschau ist keine abgeschlossene Bestellung
+        und hat keinen Bearbeitungsstatus.
+    </p>
+    {% endif %}
+
+    <p>
+        <a
+            class="action-button action-button--secondary"
+            href="{{ url_for('admin_orders') }}"
+        >
+            Zur Bestellliste
+        </a>
+    </p>
+</section>
+{% endblock %}
