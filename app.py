@@ -1,50 +1,58 @@
-import click
-import hmac
-import os
-import re
-import secrets
-import shutil
-import sqlite3
-import warnings
-
-from contextlib import closing
-from datetime import date, time, timedelta
-from functools import wraps
-from io import BytesIO
-from pathlib import Path
-from urllib.parse import urlsplit
-
-from flask import (
-    Flask,
-    abort,
-    flash,
-    redirect,
-    render_template,
-    request,
-    send_from_directory,
-    session,
-    url_for,
-)
-from PIL import Image, ImageOps, UnidentifiedImageError
-from sqlalchemy import inspect, text
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-
+from flask import Flask, render_template
 from models import (
     db,
-    Admin,
     Event,
-    Member,
-    MemberApplication,
-    Product,
     Team,
+    Admin,
     TeamApplication,
+    MemberApplication,
+    Member,
+    Product,
+    DemoOrder,
 )
+from werkzeug.security import generate_password_hash, check_password_hash
+import click
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    session,
+    abort,
+    flash,
+    send_from_directory,
+)
+import os
+import secrets
+import hmac
+from datetime import timedelta, date, time, timezone
+from functools import wraps
+import re
+from urllib.parse import urlsplit
+from sqlalchemy.exc import IntegrityError
+import sqlite3
+from pathlib import Path
+from contextlib import closing
+from sqlalchemy import inspect, text
+import warnings
+from io import BytesIO
+from PIL import Image, ImageOps, UnidentifiedImageError
+import shutil
+import sqlite3
+from pathlib import Path
+from contextlib import closing
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+import json
 from shop_cart import (
+    read_cart,
+    register_shop_cart,
     product_variant_form,
     read_variant_form,
-    register_shop_cart,
     save_product_variants,
 )
+
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
@@ -754,6 +762,104 @@ def delete_member_photo_files(filename):
     (public_member_photo_folder() / filename).unlink(missing_ok=True)
     (member_photo_folder() / filename).unlink(missing_ok=True)
 
+
+def read_member_edit_form():
+    values = {
+        "nickname": request.form.get("nickname", "").strip(),
+        "game": request.form.get("game", "").strip(),
+        "role": request.form.get("role", "").strip(),
+        "external_profile": request.form.get("external_profile", "").strip(),
+    }
+
+    limits = {
+        "nickname": 80,
+        "game": 100,
+        "role": 100,
+        "external_profile": 500,
+    }
+
+    if not values["nickname"] or not values["game"]:
+        raise ValueError("Nickname und Spiel sind Pflichtfelder.")
+
+    for key, limit in limits.items():
+        if len(values[key]) > limit:
+            raise ValueError("Ein Feld ist zu lang.")
+
+    if values["external_profile"]:
+        parts = urlsplit(values["external_profile"])
+
+        if parts.scheme not in ("http", "https") or not parts.netloc:
+            raise ValueError("Der externe Profil-Link ist ungültig.")
+
+    values["publish_profile"] = request.form.get("publish_profile") == "1"
+
+    return values
+
+
+@app.route("/admin/members/<int:member_id>/edit", methods=["POST"])
+@admin_required
+def admin_member_edit_save(member_id):
+    check_csrf()
+
+    member = db.get_or_404(Member, member_id)
+    application = member.application
+
+    try:
+        values = read_member_edit_form()
+    except ValueError as exc:
+        flash(str(exc), "member_application_admin")
+
+        return redirect(url_for("admin_member_edit", member_id=member_id))
+
+    application.nickname = values["nickname"]
+    application.game = values["game"]
+    application.role = values["role"]
+    application.external_profile = values["external_profile"]
+    application.publish_profile = values["publish_profile"]
+    member.nickname_key = values["nickname"].casefold()
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+
+        flash(
+            "Dieser Nickname ist bereits vergeben.",
+            "member_application_admin"
+        )
+
+        return redirect(url_for("admin_member_edit", member_id=member_id))
+
+    if application.publish_profile:
+        try:
+            publish_member_photo(application)
+        except (OSError, ValueError):
+            app.logger.exception(
+                "Fotoveröffentlichung fehlgeschlagen: Mitglied %s",
+                member_id
+            )
+
+            flash(
+                "Das Mitglied wurde gespeichert, aber das Foto "
+                "konnte nicht veröffentlicht werden.",
+                "member_application_admin"
+            )
+
+            return redirect(url_for("admin_member_applications"))
+    else:
+        filename = application.photo_filename
+
+        if filename and re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+            (public_member_photo_folder() / filename).unlink(missing_ok=True)
+
+    flash(
+        "Das Mitglied wurde gespeichert.",
+        "member_application_admin"
+    )
+
+    return redirect(url_for("admin_member_applications"))
+
+
 @app.route("/admin/members/<int:member_id>/delete", methods=["POST"])
 @admin_required
 def admin_member_delete(member_id):
@@ -775,6 +881,15 @@ def admin_member_delete(member_id):
     )
 
     return redirect(url_for("admin_member_applications"))
+
+
+def delete_member_photo_files(filename):
+    if not filename or not re.fullmatch(r"[a-f0-9]{32}\.png", filename):
+        return
+
+    (public_member_photo_folder() / filename).unlink(missing_ok=True)
+    (member_photo_folder() / filename).unlink(missing_ok=True)
+
 
 def unpublish_member_photo(filename):
     if filename and re.fullmatch(r"[a-f0-9]{32}\.png", filename):
@@ -1204,23 +1319,8 @@ def admin_team_delete(team_id):
 
     selected_team = db.get_or_404(Team, team_id)
 
-    try:
-        db.session.execute(
-            db.update(TeamApplication)
-            .where(TeamApplication.team_id == team_id)
-            .values(team_id=None)
-        )
-
-        selected_team.members.clear()
-
-        db.session.delete(selected_team)
-        db.session.commit()
-    except SQLAlchemyError:
-        db.session.rollback()
-        app.logger.exception(
-            "Team konnte nicht gelöscht werden: %s", team_id
-        )
-        abort(500)
+    db.session.delete(selected_team)
+    db.session.commit()
 
     return redirect(url_for("admin_teams"))
 
@@ -1623,6 +1723,49 @@ def init_db():
     db.create_all()
     print("Datenbank bereit: instance/berner_fuechse.db")
 
+@app.cli.command("add-member-photo")
+def add_member_photo():
+    inspector = inspect(db.engine)
+
+    if not inspector.has_table("member_applications"):
+        raise click.ClickException(
+            "Die Tabelle member_applications fehlt. "
+            "Führe zuerst init-db aus."
+        )
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("member_applications")
+    }
+
+    if "photo_filename" in columns:
+        click.echo("Die Fotospalte ist bereits vorhanden.")
+        return
+
+    database_path = Path(db.engine.url.database)
+
+    backup_folder = Path(app.instance_path) / "backups"
+    backup_folder.mkdir(parents=True, exist_ok=True)
+
+    backup_path = backup_folder / (
+        f"before_member_photo_{secrets.token_hex(8)}.db"
+    )
+
+    with closing(sqlite3.connect(str(database_path))) as source:
+        with closing(sqlite3.connect(str(backup_path))) as destination:
+            source.backup(destination)
+
+    with db.engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE member_applications "
+                "ADD COLUMN photo_filename VARCHAR(255)"
+            )
+        )
+
+    click.echo(f"Backup erstellt: {backup_path}")
+    click.echo("Fotospalte erfolgreich hinzugefügt.")
+
 @app.cli.command("create-admin")
 @click.option("--username", prompt="Benutzername")
 @click.password_option(
@@ -1720,8 +1863,6 @@ def membership():
 
 @app.route("/shop")
 def shop():
-    from shop_cart import ProductVariant
-
     sorting = {
         "name_asc": (
             db.func.lower(Product.name).asc(),
@@ -1756,86 +1897,16 @@ def shop():
     if sort not in sorting:
         sort = "name_asc"
 
-    q = request.args.get("q", "").strip()[:150]
-    in_stock = request.args.get("in_stock") == "1"
-
-    size = request.args.get("size", "").strip()
-    if size != "__none__":
-        size = size.upper()
-    if len(size) > 32:
-        size = ""
-
-    variant_total = (
-        db.select(
-            db.func.coalesce(db.func.sum(ProductVariant.stock), 0)
-        )
-        .where(ProductVariant.product_id == Product.id)
-        .correlate(Product)
-        .scalar_subquery()
-    )
-
-    has_sized = Product.variants.any(ProductVariant.size != "")
-    has_empty = Product.variants.any(ProductVariant.size == "")
-
-    ready = (
-        Product.variants.any()
-        & (variant_total == Product.quantity)
-        & ~(has_sized & has_empty)
-    )
-
-    size_options = db.session.execute(
-        db.select(ProductVariant.size)
-        .join(Product)
-        .where(
-            Product.active.is_(True),
-            ProductVariant.stock > 0,
-            ProductVariant.size != "",
-            ready,
-        )
-        .distinct()
-        .order_by(ProductVariant.size)
-    ).scalars().all()
-
-    statement = db.select(Product).where(
-        Product.active.is_(True)
-    )
-
-    if size:
-        wanted_size = "" if size == "__none__" else size
-
-        statement = statement.where(
-            ready,
-            Product.variants.any(
-                (ProductVariant.size == wanted_size)
-                & (ProductVariant.stock > 0)
-            ),
-        )
-    elif in_stock:
-        statement = statement.where(
-            ready,
-            Product.variants.any(ProductVariant.stock > 0),
-        )
-
     products = db.session.execute(
-        statement.order_by(*sorting[sort])
+        db.select(Product)
+        .where(Product.active.is_(True))
+        .order_by(*sorting[sort])
     ).scalars().all()
-
-    if q:
-        needle = q.casefold()
-        products = [
-            product
-            for product in products
-            if needle in product.name.casefold()
-        ]
 
     return render_template(
         "shop.html",
         products=products,
-        sort=sort,
-        q=q,
-        in_stock=in_stock,
-        selected_size=size,
-        size_options=size_options,
+        sort=sort
     )
 
 @app.route("/rules")
