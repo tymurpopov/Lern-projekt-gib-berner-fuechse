@@ -6,6 +6,12 @@ The project demonstrates a Flask-based website with team and member information,
 
 > **Note:** Berner Füchse is a fictional club created for educational purposes. This is not the official website of a real esports organisation. The shop is a demonstration feature and does not process real payments.
 
+## Live Demo
+
+The Berner Füchse website is hosted on PythonAnywhere.
+
+🌐 **Live Website:** https://tymurpopov.pythonanywhere.com/
+
 ## Features
 
 ### Public website
