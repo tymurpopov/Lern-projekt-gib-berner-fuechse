@@ -51,6 +51,7 @@ from shop_cart import (
     product_variant_form,
     read_variant_form,
     save_product_variants,
+    ProductVariant,
 )
 
 
@@ -1861,6 +1862,7 @@ def membership():
         members=members
     )
 
+
 @app.route("/shop")
 def shop():
     sorting = {
@@ -1893,21 +1895,65 @@ def shop():
     }
 
     sort = request.args.get("sort", "name_asc")
-
     if sort not in sorting:
         sort = "name_asc"
 
+    q = request.args.get("q", "").strip()
+    selected_size = request.args.get("size", "").strip().upper()
+    in_stock = request.args.get("in_stock") == "1"
+
+    statement = db.select(Product).where(
+        Product.active.is_(True)
+    )
+
+    if q:
+        statement = statement.where(
+            Product.name.ilike(f"%{q}%")
+        )
+
+    size_options = db.session.execute(
+        db.select(ProductVariant.size)
+        .join(Product)
+        .where(
+            Product.active.is_(True),
+            ProductVariant.stock > 0
+        )
+        .distinct()
+        .order_by(ProductVariant.size)
+    ).scalars().all()
+
+    if selected_size == "__NONE__":
+        statement = statement.where(
+            ~db.exists().where(
+                ProductVariant.product_id == Product.id
+            )
+        )
+    elif selected_size:
+        statement = statement.where(
+            db.exists().where(
+                ProductVariant.product_id == Product.id,
+                ProductVariant.size == selected_size,
+                ProductVariant.stock > 0
+            )
+        )
+
+    if in_stock:
+        statement = statement.where(Product.quantity > 0)
+
     products = db.session.execute(
-        db.select(Product)
-        .where(Product.active.is_(True))
-        .order_by(*sorting[sort])
+        statement.order_by(*sorting[sort])
     ).scalars().all()
 
     return render_template(
         "shop.html",
         products=products,
-        sort=sort
+        sort=sort,
+        q=q,
+        selected_size=selected_size,
+        size_options=size_options,
+        in_stock=in_stock
     )
+
 
 @app.route("/rules")
 def rules():
